@@ -585,26 +585,131 @@ function genPlan(p){ const plan=[]; let prevDay=[];
       if(!cand)break; day.push(cand.id); }
     plan.push(day); prevDay=day.map(rid=>getRecipe(rid)).filter(Boolean); }
   return plan; }
-function menuCost(m){ const need={}; m.plan.flat().forEach(rid=>{const r=getRecipe(rid); if(r)r.ing.forEach(([n,u,q])=>{ const k=canon(n); need[k]=(need[k]||0)+toGrams(n,u,q); })});
-  return Object.entries(need).reduce((s,[n,g])=>s+g/1000*(PRICES[n]||100),0)*0.9; }
+/* Стоимость меню: считаем недостающее (за вычетом того, что уже есть в холодильнике).
+   Если fridge=true — учитываем остатки, если false — полная стоимость. */
+function menuCost(m, useFridge=true){
+  const need={};
+  m.plan.flat().forEach(rid=>{ const r=getRecipe(rid); if(r) r.ing.forEach(([n,u,q])=>{ const k=canon(n); need[k]=(need[k]||0)+toGrams(n,u,q); }); });
+  let total=0;
+  Object.entries(need).forEach(([n,g])=>{
+    const have = useFridge ? haveG(n) : 0;
+    const lack = Math.max(0, g - have);
+    total += lack/1000 * (PRICES[n]||100);
+  });
+  return total;
+}
+/* Цена конкретного блюда (только недостающее) */
+function recipeCost(rid, useFridge=true){
+  const r=getRecipe(rid); if(!r) return 0;
+  let total=0;
+  r.ing.forEach(([n,u,q])=>{
+    const g=toGrams(n,u,q);
+    const have = useFridge ? haveG(n) : 0;
+    total += Math.max(0, g-have)/1000 * (PRICES[canon(n)]||100);
+  });
+  return total;
+}
+/* Цена дня */
+function dayCost(m, d, useFridge=true){
+  return m.plan[d].reduce((s,rid)=>s+recipeCost(rid, useFridge), 0);
+}
 function tryGen(){ const p=collectParams();
   if(!p.cuisines.length){ alert("Выберите хотя бы одну кухню"); return null; }
   draftParams=p; usedLiked=new Set();
   draft={days:p.days,cuisines:p.cuisines,preps:p.preps,budget:p.budget,plan:genPlan(p)};
-  draft.estCost=menuCost(draft);
+  fitBudget(draft);            // ← подгоняем под бюджет
   return draft; }
-function renderDraft(extra=""){ if(!draft){$("menuOut").innerHTML=extra;$("mRegen").style.display="none";return;}
-  const cost=draft.estCost; $("mRegen").style.display="block";
-  const diff=draft.budget-cost;
-  $("menuOut").innerHTML=(extra||"")+`<p class="hint">Стоимость: <b>~${Math.round(cost)} ₽</b> из ${draft.budget} ₽ ${diff<0?`<span style="color:var(--red)">— перебор ${-Math.round(diff)} ₽</span>`:`<span style="color:var(--accent)">— запас ${Math.round(diff)} ₽</span>`}</p>`
-    +draft.plan.map((day,d)=>{const mins=day.reduce((s,rid)=>{const r=getRecipe(rid);return s+(r?.time||0)},0);
-      return `<div class="day"><h4><span>День ${d+1} · ${draft.cuisines[d%draft.cuisines.length]}</span><span>~${mins} мин</span></h4>
-      <button class="btn small" style="margin:2px 0" onclick="simpleBreakfast(${d})">⚡ Простой завтрак (&lt;15 мин)</button>
-      ${MEAL_ORD.map((mt,mi)=>{const rid=day[mi];const r=getRecipe(rid);
-        return r?`<div class="meal">${MEAL_NAME[mt]}: <b onclick="openRecipe(${r.id},{})">${r.name}</b>${S.likes[r.id]?' <span class="tag warm">❤️</span>':""}
-          <span class="meta">${r.kcal} ккал · ${r.time} мин · ★${r.diff}</span>
-          <span class="repl" onclick="replaceDraft(${d},${mi})">🔄 заменить</span></div>`:"";}).join("")}</div>`}).join("")
-    +`<button class="btn primary" style="width:100%;margin-top:10px" onclick="saveMenu()">💾 Сохранить меню</button>`; }
+
+/* Подгоняем меню под бюджет: меняем дорогие блюда на дешёвые того же приёма */
+function fitBudget(m){
+  const budget = m.budget;
+  let cost = menuCost(m);
+  if(cost <= budget){ m.estCost = cost; return; }
+
+  const staple = new Set(STAPLES.map(s=>canon(s[0])));
+  // Собираем кандидатов: блюда, которые дороже среднего, и их дешёвые замены
+  const used = new Set(m.plan.flat());
+  const mealPool = {z:[], o:[], u:[]};
+  RECIPES.forEach(r=>{
+    if(bannedHas(r)) return;
+    const c = recipeCost(r.id);
+    mealPool[r.meal].push({r, c});
+  });
+  Object.keys(mealPool).forEach(k=>mealPool[k].sort((a,b)=>a.c-b.c));
+
+  // Идём по всем позициям, где блюдо дороже средней цены своего приёма, и ищем замену
+  let guard = 0;
+  while(cost > budget && guard < 200){
+    guard++;
+    // Находим самую дорогую позицию в меню
+    let worst = null;
+    m.plan.forEach((day,d)=>day.forEach((rid,mi)=>{
+      const rc = recipeCost(rid);
+      if(!worst || rc > worst.rc) worst = {d, mi, rid, rc};
+    }));
+    if(!worst) break;
+
+    const mt = MEAL_ORD[worst.mi];
+    // Ищем замену дешевле worst.rc * 0.8 и не занятую в этом дне
+    const daySet = new Set(m.plan[worst.d]);
+    const candidates = mealPool[mt]
+      .filter(x=>x.r.id!==worst.rid && x.c < worst.rc * 0.8 && !daySet.has(x.r.id))
+      .sort((a,b)=>a.c-b.c);
+    if(!candidates.length){ break; }
+
+    // Меняем на самый дешёвый
+    m.plan[worst.d][worst.mi] = candidates[0].r.id;
+    cost = menuCost(m);
+  }
+
+  m.estCost = cost;
+  m.fitOk = cost <= budget;
+}
+function renderDraft(extra=""){
+  if(!draft){ $("menuOut").innerHTML=extra; $("mRegen").style.display="none"; return; }
+  const cost = menuCost(draft);
+  draft.estCost = cost;
+  $("mRegen").style.display="block";
+  const diff = draft.budget - cost;
+  const pct = Math.min(100, Math.round(cost / draft.budget * 100));
+  const barColor = cost > draft.budget ? "var(--red)" : (pct > 85 ? "var(--yellow)" : "var(--green)");
+  const statusTxt = cost > draft.budget
+    ? `<span style="color:var(--red)">— перебор ${Math.round(-diff)} ₽</span>`
+    : `<span style="color:var(--accent)">— запас ${Math.round(diff)} ₽</span>`;
+
+  $("menuOut").innerHTML = (extra||"")
+    + `<p class="hint">Стоимость с учётом холодильника: <b>~${Math.round(cost)} ₽</b> из ${draft.budget} ₽ ${statusTxt}</p>
+       <div class="progress" style="margin:6px 0 10px"><div style="width:${pct}%;background:${barColor}"></div></div>
+       ${cost > draft.budget ? `<button class="btn warm" style="width:100%;margin-bottom:8px" onclick="forceBudget()">💰 Уложиться в бюджет (заменить дорогие блюда)</button>` : ""}
+       ${draft.fitOk===false ? `<p class="hint" style="color:var(--red)">Не удалось уложиться полностью — попробуйте уменьшить срок, убрать дорогие кухни или снизить бюджет.</p>` : ""}`
+    + draft.plan.map((day,d)=>{
+        const mins = day.reduce((s,rid)=>{ const r=getRecipe(rid); return s+(r?.time||0); },0);
+        const dc = dayCost(draft, d);
+        const dcColor = dc > draft.budget/draft.days ? "var(--red)" : "var(--muted)";
+        return `<div class="day">
+          <h4><span>День ${d+1} · ${draft.cuisines[d%draft.cuisines.length]}</span>
+              <span>~${mins} мин · <b style="color:${dcColor}">${Math.round(dc)} ₽</b></span></h4>
+          <button class="btn small" style="margin:2px 0" onclick="simpleBreakfast(${d})">⚡ Простой завтрак (&lt;15 мин)</button>
+          ${MEAL_ORD.map((mt,mi)=>{
+            const rid = day[mi]; const r = getRecipe(rid);
+            if(!r) return "";
+            const rc = recipeCost(rid);
+            return `<div class="meal">${MEAL_NAME[mt]}: <b onclick="openRecipe(${r.id},{})">${r.name}</b>${S.likes[r.id]?' <span class="tag warm">❤️</span>':""}
+              <span class="meta">${r.kcal} ккал · ${r.time} мин · ★${r.diff} · ${Math.round(rc)} ₽</span>
+              <span class="repl" onclick="replaceDraft(${d},${mi})">🔄 заменить</span>
+              <span class="repl" onclick="replaceCheap(${d},${mi})">💸 дешевле</span></div>`;
+          }).join("")}
+        </div>`;
+      }).join("")
+    + `<button class="btn primary" style="width:100%;margin-top:10px" onclick="saveMenu()">💾 Сохранить меню</button>`;
+}
+
+/* Принудительно уложиться в бюджет */
+function forceBudget(){
+  if(!draft) return;
+  fitBudget(draft);
+  renderDraft('<p class="hint">↻ Заменили дорогие блюда на более дешёвые.</p>');
+}
 function simpleBreakfast(d){ const r=RECIPES.filter(x=>x.meal==="z"&&x.time<=15&&!bannedHas(x));
   const pick=r[Math.floor(Math.random()*r.length)]; if(!pick)return; draft.plan[d][0]=pick.id; renderDraft(); }
 function replaceDraft(d,mi){ const mt=MEAL_ORD[mi];
@@ -612,6 +717,21 @@ function replaceDraft(d,mi){ const mt=MEAL_ORD[mi];
   if(!pick)return; draft.plan[d][mi]=pick.id; renderDraft(); }
 $("mGen").onclick=()=>{ if(tryGen()) renderDraft(); };
 $("mRegen").onclick=()=>{ draft.plan=genPlan(draftParams); draft.estCost=menuCost(draft); renderDraft('<p class="hint">↻ Перегенерировано.</p>'); };
+/* Заменить конкретное блюдо на самое дешёвое подходящего приёма */
+function replaceCheap(d, mi){
+  const mt = MEAL_ORD[mi];
+  const daySet = new Set(draft.plan[d]);
+  const cur = draft.plan[d][mi];
+  const curCost = recipeCost(cur);
+  const cands = RECIPES
+    .filter(r=>r.meal===mt && !bannedHas(r) && !daySet.has(r.id))
+    .map(r=>({r, c:recipeCost(r.id)}))
+    .filter(x=>x.c < curCost)
+    .sort((a,b)=>a.c-b.c);
+  if(!cands.length){ alert("Дешевле уже некуда."); return; }
+  draft.plan[d][mi] = cands[0].r.id;
+  renderDraft(`<p class="hint">Заменили на «${cands[0].r.name}» — ${Math.round(cands[0].c)} ₽.</p>`);
+}
 function saveMenu(){ const name="Меню №"+(S.menus.length+1);
   S.menus.push({id:now(),name,state:{},...draft}); save(); draft=null; draftParams=null;
   $("menuOut").innerHTML=""; $("mRegen").style.display="none";
