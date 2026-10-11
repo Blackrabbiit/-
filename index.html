@@ -192,28 +192,35 @@ textarea{min-height:70px;resize:vertical}
   </div>
 
   <div class="tab-pane" id="pane-sync">
-    <p class="hint" style="margin-bottom:8px">Общий «холодильник»: Google Apps Script + Google-таблица.</p>
-    <label>URL Google Apps Script</label>
-    <input id="cloudUrl" placeholder="https://script.google.com/macros/s/.../exec">
-    <div class="row" style="margin-top:10px">
-      <button class="btn primary" id="cloudSave">⬆ Сохранить в облако</button>
-      <button class="btn" id="cloudLoad">⬇ Загрузить из облака</button>
-    </div>
-    <div class="sync-status hint" id="syncStatus"></div>
-    <div class="section-title" style="margin-top:18px">База рецептов</div>
-    <div class="row" style="margin-top:8px">
-      <button class="btn" id="dbDownload">⬇ Скачать базу</button>
-      <button class="btn" id="dbUploadBtn">⬆ Загрузить базу</button>
-    </div>
-    <input type="file" id="dbUpload" accept=".json" style="display:none">
-    <p class="hint" style="margin-top:10px">Сейчас в базе: <b id="dbCount"></b> рецептов</p>
-    <div class="section-title" style="margin-top:18px">Резервная копия всего</div>
-    <div class="row">
-      <button class="btn" id="stateExport">⬇ Экспорт данных</button>
-      <button class="btn" id="stateImportBtn">⬆ Импорт данных</button>
-    </div>
-    <input type="file" id="stateImport" accept=".json" style="display:none">
+  <p class="hint" style="margin-bottom:8px">Общий «холодильник»: Google Apps Script + Google-таблица.</p>
+  <label>URL Google Apps Script</label>
+  <input id="cloudUrl" placeholder="https://script.google.com/macros/s/.../exec">
+  <label>Ваше имя в таблице</label>
+  <input id="cloudUser" placeholder="Например, Аня">
+  <div class="row" style="margin-top:10px">
+    <button class="btn primary" id="cloudSave">⬆ Сохранить мои данные</button>
+    <button class="btn" id="cloudLoad">⬇ Загрузить мои данные</button>
   </div>
+  <div class="section-title" style="margin-top:14px">Другие пользователи</div>
+  <button class="btn small" id="cloudList" style="margin-bottom:6px">🔄 Обновить список</button>
+  <div id="cloudUsers" class="hint">Список пуст.</div>
+  <div class="sync-status hint" id="syncStatus"></div>
+
+  <div class="section-title" style="margin-top:18px">База рецептов</div>
+  <div class="row" style="margin-top:8px">
+    <button class="btn" id="dbDownload">⬇ Скачать базу</button>
+    <button class="btn" id="dbUploadBtn">⬆ Загрузить базу</button>
+  </div>
+  <input type="file" id="dbUpload" accept=".json" style="display:none">
+  <p class="hint" style="margin-top:10px">Сейчас в базе: <b id="dbCount"></b> рецептов</p>
+
+  <div class="section-title" style="margin-top:18px">Резервная копия всего</div>
+  <div class="row">
+    <button class="btn" id="stateExport">⬇ Экспорт данных</button>
+    <button class="btn" id="stateImportBtn">⬆ Импорт данных</button>
+  </div>
+  <input type="file" id="stateImport" accept=".json" style="display:none">
+</div>
 </aside>
 
 <div id="modal"><div class="box" id="modalBox"></div></div>
@@ -859,22 +866,104 @@ function editPrep(i){ const p=S.prepStock[i]; const v=prompt(`Количеств
   p.qty=+v||p.qty; save(); renderPreps(); }
 
 /* ============ ОБЛАКО ============ */
+/* ============ ОБЛАКО ============ */
 $("cloudUrl").value=S.cloudUrl||"";
 $("cloudUrl").onchange=()=>{S.cloudUrl=$("cloudUrl").value.trim();save();};
+$("cloudUser").value=S.cloudUser||"";
+$("cloudUser").onchange=()=>{S.cloudUser=$("cloudUser").value.trim();save();};
 function syncMsg(t,ok){ $("syncStatus").innerHTML=ok?`<span style="color:var(--green)">${t}</span>`:`<span style="color:var(--red)">${t}</span>`; }
-$("cloudSave").onclick=async()=>{ const url=$("cloudUrl").value.trim();
+function myName(){ return ($("cloudUser").value.trim()||S.cloudUser||"Гость").slice(0,60); }
+
+$("cloudSave").onclick=async()=>{
+  const url=$("cloudUrl").value.trim();
   if(!url)return syncMsg("Сначала вставьте URL скрипта.",false);
+  const user=myName(); S.cloudUser=user; save();
   syncMsg("Сохраняю…",true);
-  try{ await fetch(url,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({state:S})});
-    syncMsg("✅ Сохранено в облако.",true); }
-  catch(e){ syncMsg("Ошибка: "+e.message,false); } };
-$("cloudLoad").onclick=async()=>{ const url=$("cloudUrl").value.trim();
+  try{
+    await fetch(url,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body:JSON.stringify({user,state:S})});
+    syncMsg(`✅ Сохранено как «${user}».`,true);
+  }catch(e){ syncMsg("Ошибка: "+e.message,false); }
+};
+
+$("cloudLoad").onclick=async()=>{
+  const url=$("cloudUrl").value.trim();
   if(!url)return syncMsg("Сначала вставьте URL скрипта.",false);
+  const user=myName();
   syncMsg("Загружаю…",true);
-  try{ const r=await fetch(url); const t=await r.text(); const d=JSON.parse(t);
-    if(d.state){ S=Object.assign(S,d.state); save(); renderAll(); syncMsg("✅ Данные загружены.",true); }
-    else syncMsg("Облако пустое.",false); }
-  catch(e){ syncMsg("Ошибка: "+e.message,false); } };
+  try{
+    const r=await fetch(url+"?user="+encodeURIComponent(user));
+    const d=await r.json();
+    if(d.ok && d.state){
+      S=Object.assign(S,d.state);
+      S.cloudUser=user;
+      save(); renderAll();
+      syncMsg(`✅ Данные «${user}» загружены.`,true);
+    } else {
+      syncMsg(d.err||"Не найдено.",false);
+    }
+  }catch(e){ syncMsg("Ошибка: "+e.message,false); }
+};
+
+$("cloudList").onclick=async()=>{
+  const url=$("cloudUrl").value.trim();
+  if(!url)return syncMsg("Сначала вставьте URL скрипта.",false);
+  syncMsg("Запрашиваю список…",true);
+  try{
+    const r=await fetch(url+"?list=1");
+    const d=await r.json();
+    if(!d.ok){ syncMsg(d.err||"Ошибка.",false); return; }
+    if(!d.users.length){ $("cloudUsers").innerHTML='<p class="hint">Пока никто не сохранял.</p>'; syncMsg("Список пуст.",true); return; }
+    $("cloudUsers").innerHTML=d.users.map(u=>`<div class="fridge-item">
+      <b>${u.user}</b>
+      <span class="qty">${u.updated?new Date(u.updated).toLocaleString():""}</span>
+      <button class="btn small" onclick="pullFrom('${u.user.replace(/'/g,"\\'")}')">⬇ Загрузить</button>
+    </div>`).join("");
+    syncMsg(`Найдено пользователей: ${d.users.length}.`,true);
+  }catch(e){ syncMsg("Ошибка: "+e.message,false); }
+};
+
+async function pullFrom(user){
+  const url=$("cloudUrl").value.trim();
+  if(!url)return;
+  if(!confirm(`Загрузить данные «${user}» и добавить к своим (меню, холодильник, заготовки)?`)) return;
+  try{
+    const r=await fetch(url+"?user="+encodeURIComponent(user));
+    const d=await r.json();
+    if(!d.ok||!d.state){ syncMsg("Не удалось загрузить.",false); return; }
+    mergeState(d.state);
+    save(); renderAll();
+    syncMsg(`✅ Данные «${user}» добавлены к вашим.`,true);
+  }catch(e){ syncMsg("Ошибка: "+e.message,false); }
+}
+
+/* Объединение чужого состояния с моим: складываем, не затираем */
+function mergeState(other){
+  if(!other) return;
+  // Холодильник: суммируем продукты с одинаковым именем и единицей
+  (other.fridge||[]).forEach(of=>{
+    const mine=S.fridge.find(f=>canon(f.name)===canon(of.name)&&f.unit===of.unit);
+    if(mine){ mine.qty=+(mine.qty+of.qty).toFixed(2); }
+    else S.fridge.push({...of,id:now()+Math.random()});
+  });
+  // Меню: добавляем как новые, не перетирая
+  (other.menus||[]).forEach(om=>{
+    if(!S.menus.some(m=>m.id===om.id)){
+      S.menus.push({...om,id:now()+Math.random(),name:om.name+" (от "+(other.cloudUser||"другого")+")"});
+    }
+  });
+  // Заготовки: суммируем по имени
+  (other.prepStock||[]).forEach(op=>{
+    const mine=S.prepStock.find(p=>p.name===op.name&&p.unit===op.unit);
+    if(mine){ mine.qty=+(mine.qty+op.qty).toFixed(2); }
+    else S.prepStock.push({...op});
+  });
+  // Лайки и заметки: объединяем
+  Object.assign(S.likes, other.likes||{});
+  Object.assign(S.recipeNotes, other.recipeNotes||{});
+  // Опрос оставляем свой; если у меня его нет — берём чужой
+  if(!S.survey && other.survey) S.survey=other.survey;
+}
 
 /* ============ БАЗА РЕЦЕПТОВ ============ */
 $("dbDownload").onclick=()=>{ const blob=new Blob([JSON.stringify(RECIPES,null,1)],{type:"application/json"});
