@@ -964,7 +964,44 @@ function mergeState(other){
   // Опрос оставляем свой; если у меня его нет — берём чужой
   if(!S.survey && other.survey) S.survey=other.survey;
 }
+/* ============ АВТОЗАГРУЗКА ПРИ СТАРТЕ ============ */
+async function autoSync(){
+  const url = (S.cloudUrl || $("cloudUrl").value || "").trim();
+  if(!url) return;
 
+  // 1. Тихо обновляем список пользователей
+  try{
+    const r = await fetch(url + "?list=1");
+    const d = await r.json();
+    if(d.ok && d.users){
+      $("cloudUsers").innerHTML = d.users.length
+        ? d.users.map(u=>`<div class="fridge-item">
+            <b>${u.user}</b>
+            <span class="qty">${u.updated?new Date(u.updated).toLocaleString():""}</span>
+            <button class="btn small" onclick="pullFrom('${u.user.replace(/'/g,"\\'")}')">⬇ Загрузить</button>
+          </div>`).join("")
+        : '<p class="hint">Пока никто не сохранял.</p>';
+    }
+  }catch(e){ /* тихо игнорируем — сеть может быть недоступна */ }
+
+  // 2. Автоматически тянем МОИ данные (заменяя, не суммируя)
+  const user = (S.cloudUser || $("cloudUser").value || "").trim();
+  if(!user) return;
+  try{
+    const r = await fetch(url + "?user=" + encodeURIComponent(user));
+    const d = await r.json();
+    if(d.ok && d.state){
+      // Заменяем состояние целиком, а не сливаем
+      S = Object.assign(S, d.state);
+      S.cloudUrl = url; S.cloudUser = user;
+      save(); renderAll();
+      syncMsg(`✅ Автозагрузка: данные «${user}» подтянуты.`, true);
+    }
+  }catch(e){ /* тихо */ }
+}
+
+/* Запуск автозагрузки через 1 секунду после старта */
+window.addEventListener("load", ()=>{ setTimeout(autoSync, 1000); });
 /* ============ БАЗА РЕЦЕПТОВ ============ */
 $("dbDownload").onclick=()=>{ const blob=new Blob([JSON.stringify(RECIPES,null,1)],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="recipes.json"; a.click(); };
