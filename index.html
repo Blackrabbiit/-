@@ -1223,28 +1223,6 @@ $("dbUpload").onchange=e=>{ const f=e.target.files[0]; if(!f)return; const rd=ne
       RECIPES=j; localStorage.setItem("fk5_recipes",JSON.stringify(j)); ALL_ING=[...new Set(RECIPES.flatMap(r=>r.ing.map(g=>canon(g[0]))))].sort();
       $("dbCount").textContent=RECIPES.length; syncMsg(`✅ База: ${RECIPES.length} рецептов.`,true); renderNew(); }
     catch(_){ syncMsg("Файл не похож на базу.",false); } };
-  rd.readAsText(f); };
-(function tryLoadLocalRecipes(){
-  // 1. Пробуем fetch свежего файла
-  fetch("recipes.json")
-    .then(r=>{ if(!r.ok) throw 0; return r.json(); })
-    .then(j=>{
-      if(Array.isArray(j) && j.length){
-        RECIPES = j;
-        localStorage.setItem("fk5_recipes", JSON.stringify(j));
-      }
-    })
-    .catch(()=>{
-      // 2. Если fetch не сработал (file://), берём кэш
-      const cached = localStorage.getItem("fk5_recipes");
-      if(cached){ try{ RECIPES = JSON.parse(cached); }catch(_){} }
-    })
-    .finally(()=>{
-      ALL_ING=[...new Set(RECIPES.flatMap(r=>r.ing.map(g=>canon(g[0]))))].sort();
-      const el=$("dbCount"); if(el) el.textContent=RECIPES.length;
-      renderNew();
-    });
-})();
 
 /* ============ ЭКСПОРТ/ИМПОРТ ============ */
 $("stateExport").onclick=()=>{ const blob=new Blob([JSON.stringify(S,null,1)],{type:"application/json"});
