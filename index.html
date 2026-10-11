@@ -295,6 +295,10 @@ function gDisplay(n,g){
     ? (g/1000).toFixed(2).replace(/\.?0+$/,"") + " кг"
     : Math.round(g) + " г";
 }
+  
+function cookedEntryName(r){ return "Готовое: "+r.name; }
+function findCooked(r){ return S.fridge.find(f=>f.name===cookedEntryName(r)); }
+function getRecipe(rid){ return RECIPES.find(r=>r.id===rid); }
 /* ============ РАСЧЁТ КАЛОРИЙ ============ */
 function calcMember(p){
   const bmr=10*p.w+6.25*p.h-5*p.age+(p.sex==="м"?5:-161);
