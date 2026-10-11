@@ -822,7 +822,7 @@ function fitBudget(m){
   RECIPES.forEach(r=>{
     if(bannedHas(r)) return;
     const mt = MEAL_ORD.includes(r.meal) ? r.meal : "u";
-    mealPool[mt].push({id:r.id, c:recipeCost(r.id)});
+    if(mealPool[mt]) mealPool[mt].push({id:r.id, c:recipeCost(r.id)});
   });
   Object.keys(mealPool).forEach(k=>mealPool[k].sort((a,b)=>a.c-b.c));
 
