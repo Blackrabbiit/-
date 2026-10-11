@@ -306,6 +306,8 @@ const MEAL_ORD=["z","o","u"];
 const SKIP_REASONS=["работа","прогулка","доставка еды","не хочется","другое"];
 const EQUIP=["плита","духовка","мультиварка","аэрогриль","блендер","микроволновка","гриль","морозилка"];
 const SYN={"крупа рисовая":"рис","сыр моцарелла":"моцарелла","вермишель":"макароны","паста":"макароны","сыр":"сыр твёрдый"};
+const canon=n=>SYN[n]||n;
+
 /* Группы продуктов для опроса «что исключить» */
 const FOOD_GROUPS = {
   "мясо":       ["говядина","свинина","курица","фарш говяжий","фарш свиной","бекон","колбаса","пельмени","баранина","телятина","индейка","крылышки","бедро","окорок","сосиски","ветчина","сало"],
@@ -336,7 +338,6 @@ const FOOD_TO_GROUP = (() => {
 
 /* Список групп для опроса */
 const EXCLUDE_GROUPS = Object.keys(FOOD_GROUPS);
-const canon=n=>SYN[n]||n;
 const PIECE=new Set(["яйца","банан","манго","лайм","лимон","нори","тортильи","булочки для бургеров","багет","лаваш","пельмени"]);
 let ALL_ING=[...new Set(RECIPES.flatMap(r=>r.ing.map(g=>canon(g[0]))))].sort();
 
@@ -354,9 +355,8 @@ function toGrams(n, u, q){
   if(SPOON_WEIGHT[k] && SPOON_WEIGHT[k][u] != null){
     return q * SPOON_WEIGHT[k][u];
   }
-  // 2. Продуктовая база (шт → граммы для яиц/бананов и т.п.)
+  // 2. Продуктовая база
   if(UNIT_G_BASE[k] != null){
-    // Если единица тоже в базе (кг → 1000), умножаем
     const per = UNIT_G_BASE[u] != null ? UNIT_G_BASE[u] : UNIT_G_BASE[k];
     return q * per;
   }
@@ -364,15 +364,6 @@ function toGrams(n, u, q){
   if(UNIT_G_BASE[u] != null) return q * UNIT_G_BASE[u];
   // 4. Дефолт
   return q * 100;
-}
-function gDisplay(n,g){
-  if(PIECE.has(canon(n)) && UNIT_G_BASE[canon(n)]){
-    const c = Math.max(1, Math.round(g / UNIT_G_BASE[canon(n)]));
-    return c + " шт";
-  }
-  return g >= 1000
-    ? (g/1000).toFixed(2).replace(/\.?0+$/,"") + " кг"
-    : Math.round(g) + " г";
 }
   
 function cookedEntryName(r){ return "Готовое: "+r.name; }
