@@ -279,13 +279,14 @@ const save=()=>localStorage.setItem(LS,JSON.stringify(S));
 const $=id=>document.getElementById(id);
 const now=()=>Date.now(), DAY=86400000;
 
-function toGrams(n,u,q){ return q*(UNIT_G_BASE[canon(n)]||UNIT_G_BASE[u]||200); }
-function gDisplay(n,g){ if(PIECE.has(canon(n))&&UNIT_G_BASE[canon(n)]){ const c=Math.max(1,Math.round(g/UNIT_G_BASE[canon(n)])); return c+" шт"; }
-  return g>=1000?(g/1000).toFixed(2).replace(/\.?0+$/,"")+" кг":Math.round(g)+" г"; }
-function cookedEntryName(r){ return "Готовое: "+r.name; }
-function findCooked(r){ return S.fridge.find(f=>f.name===cookedEntryName(r)); }
-function getRecipe(rid){ return RECIPES.find(r=>r.id===rid); }
-
+function toGrams(n,u,q){
+  // Сначала пробуем единицу измерения (кг, г, л, мл, шт, уп, ст.л., ч.л.)
+  let per = UNIT_G_BASE[canon(u)];          // «кг» → 1000, «г» → 1
+  if(per == null) per = UNIT_G_BASE[canon(n)]; // иначе — по продукту
+  if(per == null) per = 100;                // дефолт — 100 г на единицу
+  return q * per;
+}
+  
 /* ============ РАСЧЁТ КАЛОРИЙ ============ */
 function calcMember(p){
   const bmr=10*p.w+6.25*p.h-5*p.age+(p.sex==="м"?5:-161);
@@ -602,6 +603,7 @@ function priceOf(n){
   return 100;
 }
 /* Стоимость меню: считаем недостающее (за вычетом того, что уже есть в холодильнике) */
+/* Стоимость меню: граммы → кг → умножение на цену за кг */
 function menuCost(m, useFridge=true){
   if(!m || !m.plan) return 0;
   const need = {};
@@ -618,25 +620,25 @@ function menuCost(m, useFridge=true){
   let total = 0;
   Object.entries(need).forEach(([n,g])=>{
     const have = useFridge ? haveG(n) : 0;
-    const lack = Math.max(0, g - have);
-    total += lack/1000 * priceOf(n);
+    const lack = Math.max(0, g - have);       // в граммах
+    total += (lack / 1000) * priceOf(n);      // граммы → кг
   });
   return Math.round(total);
 }
-/* Цена одного блюда */
+
 function recipeCost(rid, useFridge=true){
   const r = getRecipe(rid);
   if(!r || !r.ing) return 0;
   let total = 0;
   r.ing.forEach(([n,u,q])=>{
-    const g = toGrams(n,u,q);
+    const g = toGrams(n,u,q);                  // в граммах
     if(!isFinite(g) || g <= 0) return;
     const have = useFridge ? haveG(n) : 0;
-    total += Math.max(0, g-have)/1000 * priceOf(n);
+    total += (Math.max(0, g - have) / 1000) * priceOf(n);  // граммы → кг
   });
   return Math.round(total);
 }
-/* Цена дня */
+
 function dayCost(m, d, useFridge=true){
   if(!m || !m.plan[d]) return 0;
   return m.plan[d].reduce((s,rid)=>s+recipeCost(rid, useFridge), 0);
