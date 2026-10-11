@@ -409,7 +409,7 @@ function eatCooked(id){ const f=S.fridge.find(x=>x.id===id); if(!f)return;
   save(); renderFridge(); renderAdvice(S.survey?.people[S.member]);
   alert(`Съедено: «${f.name.replace("Готовое: ","")}». Осталось: ${f.qty>0?f.qty+" порц":"0"}.`); }
 
-/* ============ СКОРОПОРТ → ПРЕДЛОЖИТЬ БЛЮДА ============ */
+/* ============ ПРЕДЛОЖИТЬ БЛЮДА ============ */
 function favCuisine(){ const cnt={}; S.menus.forEach(m=>m.plan.flat().forEach(rid=>{const r=getRecipe(rid); if(r){cnt[r.cuisine]=(cnt[r.cuisine]||0)+1}}));
   return Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0]?.[0]||"русская"; }
 function renderExpiring(list){ const exp=list.filter(i=>fridgeLeft(i)<=3&&!i.name.startsWith("Готовое:"));
