@@ -616,7 +616,36 @@ function priceOf(n){
   return 100;
 }
 /* Стоимость меню: считаем недостающее (за вычетом того, что уже есть в холодильнике) */
-/* Стоимость меню: граммы → кг → умножение на цену за кг */
+/* Цена одной ПОРЦИИ блюда (без учёта холодильника) */
+function recipeCostPerPortion(rid){
+  const r = getRecipe(rid);
+  if(!r || !r.ing) return 0;
+  const portions = r.portions || 4;
+  let total = 0;
+  r.ing.forEach(([n,u,q])=>{
+    const g = toGrams(n,u,q);          // граммов на ВСЁ блюдо
+    if(!isFinite(g) || g <= 0) return;
+    total += (g / portions / 1000) * priceOf(n);  // граммы на 1 порцию → кг
+  });
+  return total;
+}
+
+/* Цена блюда с учётом того, что уже есть в холодильнике.
+   Считаем, сколько граммов реально надо докупить на всё блюдо. */
+function recipeCost(rid, useFridge=true){
+  const r = getRecipe(rid);
+  if(!r || !r.ing) return 0;
+  let total = 0;
+  r.ing.forEach(([n,u,q])=>{
+    const g = toGrams(n,u,q);
+    if(!isFinite(g) || g <= 0) return;
+    const have = useFridge ? haveG(n) : 0;
+    total += (Math.max(0, g - have) / 1000) * priceOf(n);
+  });
+  return Math.round(total);
+}
+
+/* Цена всего меню: суммируем недостающее по всем продуктам */
 function menuCost(m, useFridge=true){
   if(!m || !m.plan) return 0;
   const need = {};
@@ -633,21 +662,7 @@ function menuCost(m, useFridge=true){
   let total = 0;
   Object.entries(need).forEach(([n,g])=>{
     const have = useFridge ? haveG(n) : 0;
-    const lack = Math.max(0, g - have);       // в граммах
-    total += (lack / 1000) * priceOf(n);      // граммы → кг
-  });
-  return Math.round(total);
-}
-
-function recipeCost(rid, useFridge=true){
-  const r = getRecipe(rid);
-  if(!r || !r.ing) return 0;
-  let total = 0;
-  r.ing.forEach(([n,u,q])=>{
-    const g = toGrams(n,u,q);                  // в граммах
-    if(!isFinite(g) || g <= 0) return;
-    const have = useFridge ? haveG(n) : 0;
-    total += (Math.max(0, g - have) / 1000) * priceOf(n);  // граммы → кг
+    total += (Math.max(0, g - have) / 1000) * priceOf(n);
   });
   return Math.round(total);
 }
