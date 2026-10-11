@@ -699,6 +699,8 @@ function bannedHas(r){
 
 // 2. Исправляем pickRecipe (добавляем запасные варианты, как во втором файле)
 function pickRecipe(dayCuisine,mt,comp,prevDay,day){
+  console.log(`pickRecipe: mt=${mt}, cuisines=${dayCuisine}, comp=${comp}`);
+  console.log(`  Доступные рецепты для ${mt}:`, RECIPES.filter(r=>r.meal===mt).map(r=>r.name));
   const kcalT = familyAvgKcal();
   const target = kcalT * MEAL_PCT[mt];
   const BAD_FOR_MAIN = /компот|морс|лимонад|смузи|чай|кофе|какао|глинтвейн|напиток/i;
@@ -744,14 +746,18 @@ function genPlan(p){
       if(pick){
         if(S.likes[pick.id]) usedLiked.add(pick.id);
         day.push(pick.id);
+      } else {
+        // Если ничего не нашли — берем ЛЮБОЙ рецепт этого приема пищи
+        const fallback = RECIPES.find(r => r.meal === mt);
+        if(fallback) day.push(fallback.id);
       }
     }
-    // Добираем до 3 блюд только если есть валидные рецепты
+    // Добираем до 3 блюд
     while(day.length < 3){
       const mt = MEAL_ORD[day.length];
       const used = plan.flat().concat(day);
       const cand = RECIPES
-        .filter(r => r.meal === mt && !bannedHas(r) && !day.includes(r.id))
+        .filter(r => r.meal === mt && !day.includes(r.id))
         .sort((a, b) =>
           used.filter(x => x === a.id).length - used.filter(x => x === b.id).length
         )[0];
