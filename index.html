@@ -286,7 +286,15 @@ function toGrams(n,u,q){
   if(per == null) per = 100;                // дефолт — 100 г на единицу
   return q * per;
 }
-  
+function gDisplay(n,g){
+  if(PIECE.has(canon(n)) && UNIT_G_BASE[canon(n)]){
+    const c = Math.max(1, Math.round(g / UNIT_G_BASE[canon(n)]));
+    return c + " шт";
+  }
+  return g >= 1000
+    ? (g/1000).toFixed(2).replace(/\.?0+$/,"") + " кг"
+    : Math.round(g) + " г";
+}
 /* ============ РАСЧЁТ КАЛОРИЙ ============ */
 function calcMember(p){
   const bmr=10*p.w+6.25*p.h-5*p.age+(p.sex==="м"?5:-161);
