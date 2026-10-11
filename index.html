@@ -587,30 +587,51 @@ function genPlan(p){ const plan=[]; let prevDay=[];
   return plan; }
 /* Стоимость меню: считаем недостающее (за вычетом того, что уже есть в холодильнике).
    Если fridge=true — учитываем остатки, если false — полная стоимость. */
+/* Безопасная цена продукта за 1 кг (или за штуку для PIECE) */
+function priceOf(n){
+  const k = canon(n);
+  const p = PRICES[k];
+  if(typeof p === "number" && isFinite(p)) return p;
+  return 100;
+}
+/* Стоимость меню: считаем недостающее (за вычетом того, что уже есть в холодильнике) */
 function menuCost(m, useFridge=true){
-  const need={};
-  m.plan.flat().forEach(rid=>{ const r=getRecipe(rid); if(r) r.ing.forEach(([n,u,q])=>{ const k=canon(n); need[k]=(need[k]||0)+toGrams(n,u,q); }); });
-  let total=0;
+  if(!m || !m.plan) return 0;
+  const need = {};
+  m.plan.flat().forEach(rid=>{
+    const r = getRecipe(rid);
+    if(!r || !r.ing) return;
+    r.ing.forEach(([n,u,q])=>{
+      const k = canon(n);
+      const g = toGrams(n,u,q);
+      if(!isFinite(g) || g <= 0) return;
+      need[k] = (need[k]||0) + g;
+    });
+  });
+  let total = 0;
   Object.entries(need).forEach(([n,g])=>{
     const have = useFridge ? haveG(n) : 0;
     const lack = Math.max(0, g - have);
-    total += lack/1000 * (PRICES[n]||100);
+    total += lack/1000 * priceOf(n);
   });
-  return total;
+  return Math.round(total);
 }
-/* Цена конкретного блюда (только недостающее) */
+/* Цена одного блюда */
 function recipeCost(rid, useFridge=true){
-  const r=getRecipe(rid); if(!r) return 0;
-  let total=0;
+  const r = getRecipe(rid);
+  if(!r || !r.ing) return 0;
+  let total = 0;
   r.ing.forEach(([n,u,q])=>{
-    const g=toGrams(n,u,q);
+    const g = toGrams(n,u,q);
+    if(!isFinite(g) || g <= 0) return;
     const have = useFridge ? haveG(n) : 0;
-    total += Math.max(0, g-have)/1000 * (PRICES[canon(n)]||100);
+    total += Math.max(0, g-have)/1000 * priceOf(n);
   });
-  return total;
+  return Math.round(total);
 }
 /* Цена дня */
 function dayCost(m, d, useFridge=true){
+  if(!m || !m.plan[d]) return 0;
   return m.plan[d].reduce((s,rid)=>s+recipeCost(rid, useFridge), 0);
 }
 function tryGen(){ const p=collectParams();
@@ -621,49 +642,54 @@ function tryGen(){ const p=collectParams();
   return draft; }
 
 /* Подгоняем меню под бюджет: меняем дорогие блюда на дешёвые того же приёма */
-function fitBudget(m){
-  const budget = m.budget;
-  let cost = menuCost(m);
-  if(cost <= budget){ m.estCost = cost; return; }
 
-  const staple = new Set(STAPLES.map(s=>canon(s[0])));
-  // Собираем кандидатов: блюда, которые дороже среднего, и их дешёвые замены
-  const used = new Set(m.plan.flat());
+function fitBudget(m){
+  if(!m || !m.plan) return;
+  const budget = m.budget || 3000;
+  let cost = menuCost(m);
+  if(cost <= budget){ m.estCost = cost; m.fitOk = true; return; }
+
+  // Пул блюд по приёму пищи с ценами
   const mealPool = {z:[], o:[], u:[]};
   RECIPES.forEach(r=>{
     if(bannedHas(r)) return;
-    const c = recipeCost(r.id);
-    mealPool[r.meal].push({r, c});
+    mealPool[r.meal].push({id:r.id, c:recipeCost(r.id)});
   });
   Object.keys(mealPool).forEach(k=>mealPool[k].sort((a,b)=>a.c-b.c));
 
-  // Идём по всем позициям, где блюдо дороже средней цены своего приёма, и ищем замену
   let guard = 0;
-  while(cost > budget && guard < 200){
+  while(cost > budget && guard < 300){
     guard++;
-    // Находим самую дорогую позицию в меню
+    // Самая дорогая позиция в меню
     let worst = null;
     m.plan.forEach((day,d)=>day.forEach((rid,mi)=>{
       const rc = recipeCost(rid);
+      if(rc <= 50) return; // уже дешёвое
       if(!worst || rc > worst.rc) worst = {d, mi, rid, rc};
     }));
     if(!worst) break;
 
     const mt = MEAL_ORD[worst.mi];
-    // Ищем замену дешевле worst.rc * 0.8 и не занятую в этом дне
     const daySet = new Set(m.plan[worst.d]);
+    // Ищем замену строго дешевле
     const candidates = mealPool[mt]
-      .filter(x=>x.r.id!==worst.rid && x.c < worst.rc * 0.8 && !daySet.has(x.r.id))
+      .filter(x=>x.id!==worst.rid && x.c < worst.rc * 0.7 && !daySet.has(x.id))
       .sort((a,b)=>a.c-b.c);
-    if(!candidates.length){ break; }
+    if(!candidates.length) break;
 
-    // Меняем на самый дешёвый
-    m.plan[worst.d][worst.mi] = candidates[0].r.id;
-    cost = menuCost(m);
+    m.plan[worst.d][worst.mi] = candidates[0].id;
+    const newCost = menuCost(m);
+    if(newCost >= cost) break; // защита от бесконечного цикла
+    cost = newCost;
   }
 
   m.estCost = cost;
   m.fitOk = cost <= budget;
+  if(!m.fitOk){
+    m.fitHint = `Не удалось уложиться: ${Math.round(cost)} ₽ из ${budget} ₽. Уберите дорогие кухни, уменьшите срок или снизьте сложность.`;
+  } else {
+    m.fitHint = "";
+  }
 }
 function renderDraft(extra=""){
   if(!draft){ $("menuOut").innerHTML=extra; $("mRegen").style.display="none"; return; }
@@ -671,31 +697,35 @@ function renderDraft(extra=""){
   draft.estCost = cost;
   $("mRegen").style.display="block";
   const diff = draft.budget - cost;
-  const pct = Math.min(100, Math.round(cost / draft.budget * 100));
+  const pct = Math.min(100, Math.round(cost / Math.max(1,draft.budget) * 100));
   const barColor = cost > draft.budget ? "var(--red)" : (pct > 85 ? "var(--yellow)" : "var(--green)");
   const statusTxt = cost > draft.budget
     ? `<span style="color:var(--red)">— перебор ${Math.round(-diff)} ₽</span>`
     : `<span style="color:var(--accent)">— запас ${Math.round(diff)} ₽</span>`;
+  const fitMsg = draft.fitOk === false
+    ? `<p class="hint" style="color:var(--red)">${draft.fitHint||"Не удалось уложиться полностью."}</p>`
+    : "";
 
   $("menuOut").innerHTML = (extra||"")
-    + `<p class="hint">Стоимость с учётом холодильника: <b>~${Math.round(cost)} ₽</b> из ${draft.budget} ₽ ${statusTxt}</p>
+    + `<p class="hint">Стоимость: <b>~${cost} ₽</b> из ${draft.budget} ₽ ${statusTxt}</p>
        <div class="progress" style="margin:6px 0 10px"><div style="width:${pct}%;background:${barColor}"></div></div>
-       ${cost > draft.budget ? `<button class="btn warm" style="width:100%;margin-bottom:8px" onclick="forceBudget()">💰 Уложиться в бюджет (заменить дорогие блюда)</button>` : ""}
-       ${draft.fitOk===false ? `<p class="hint" style="color:var(--red)">Не удалось уложиться полностью — попробуйте уменьшить срок, убрать дорогие кухни или снизить бюджет.</p>` : ""}`
+       ${cost > draft.budget ? `<button class="btn warm" style="width:100%;margin-bottom:8px" onclick="forceBudget()">💰 Уложиться в бюджет</button>` : ""}
+       ${fitMsg}`
     + draft.plan.map((day,d)=>{
         const mins = day.reduce((s,rid)=>{ const r=getRecipe(rid); return s+(r?.time||0); },0);
         const dc = dayCost(draft, d);
-        const dcColor = dc > draft.budget/draft.days ? "var(--red)" : "var(--muted)";
+        const avg = draft.budget / Math.max(1, draft.days);
+        const dcColor = dc > avg*1.3 ? "var(--red)" : (dc > avg ? "var(--muted)" : "var(--green)");
         return `<div class="day">
           <h4><span>День ${d+1} · ${draft.cuisines[d%draft.cuisines.length]}</span>
-              <span>~${mins} мин · <b style="color:${dcColor}">${Math.round(dc)} ₽</b></span></h4>
-          <button class="btn small" style="margin:2px 0" onclick="simpleBreakfast(${d})">⚡ Простой завтрак (&lt;15 мин)</button>
+              <span>~${mins} мин · <b style="color:${dcColor}">${dc} ₽</b></span></h4>
+          <button class="btn small" style="margin:2px 0" onclick="simpleBreakfast(${d})">⚡ Простой завтрак</button>
           ${MEAL_ORD.map((mt,mi)=>{
             const rid = day[mi]; const r = getRecipe(rid);
             if(!r) return "";
             const rc = recipeCost(rid);
             return `<div class="meal">${MEAL_NAME[mt]}: <b onclick="openRecipe(${r.id},{})">${r.name}</b>${S.likes[r.id]?' <span class="tag warm">❤️</span>':""}
-              <span class="meta">${r.kcal} ккал · ${r.time} мин · ★${r.diff} · ${Math.round(rc)} ₽</span>
+              <span class="meta">${r.kcal} ккал · ${r.time} мин · ★${r.diff} · ${rc} ₽</span>
               <span class="repl" onclick="replaceDraft(${d},${mi})">🔄 заменить</span>
               <span class="repl" onclick="replaceCheap(${d},${mi})">💸 дешевле</span></div>`;
           }).join("")}
@@ -719,6 +749,7 @@ $("mGen").onclick=()=>{ if(tryGen()) renderDraft(); };
 $("mRegen").onclick=()=>{ draft.plan=genPlan(draftParams); draft.estCost=menuCost(draft); renderDraft('<p class="hint">↻ Перегенерировано.</p>'); };
 /* Заменить конкретное блюдо на самое дешёвое подходящего приёма */
 function replaceCheap(d, mi){
+  if(!draft || !draft.plan[d]) return;
   const mt = MEAL_ORD[mi];
   const daySet = new Set(draft.plan[d]);
   const cur = draft.plan[d][mi];
@@ -726,7 +757,7 @@ function replaceCheap(d, mi){
   const cands = RECIPES
     .filter(r=>r.meal===mt && !bannedHas(r) && !daySet.has(r.id))
     .map(r=>({r, c:recipeCost(r.id)}))
-    .filter(x=>x.c < curCost)
+    .filter(x=>x.c < curCost && x.c > 0)
     .sort((a,b)=>a.c-b.c);
   if(!cands.length){ alert("Дешевле уже некуда."); return; }
   draft.plan[d][mi] = cands[0].r.id;
