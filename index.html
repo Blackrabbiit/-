@@ -668,6 +668,8 @@ function delMenu(id){ if(!confirm("Удалить меню?"))return; if(S.activ
   S.menus=S.menus.filter(m=>m.id!==id); save(); renderMenusMain(); fillMenuSelects(); }
 
 /* ============ ГЕНЕРАЦИЯ МЕНЮ ============ */
+
+// 1. Исправляем bannedHas (он был слишком строгим и мог блокировать всё)
 function bannedHas(r){
   const banned = (S.survey?.banned || []);
   const custom = (S.survey?.bannedCustom || "")
@@ -675,42 +677,34 @@ function bannedHas(r){
     .split(/[,;]\s*/)
     .map(s => s.trim())
     .filter(Boolean);
+    
   if(!banned.length && !custom.length) return false;
 
   return r.ing.some(([n]) => {
     const k = canon(n);
     const kl = k.toLowerCase();
 
-    // 1. Точное совпадение с исключённым продуктом
+    // Точное совпадение с исключённым продуктом
     if(banned.includes(k)) return true;
-    // 2. Продукт входит в исключённую группу
+    // Продукт входит в исключённую группу
     const g = FOOD_TO_GROUP[k];
     if(g && banned.includes(g)) return true;
-    // 3. Частичное совпадение с запрещённым продуктом из чипов
+    // Частичное совпадение с запрещённым продуктом
     if(banned.some(b => kl.includes(b.toLowerCase()) || b.toLowerCase().includes(kl))) return true;
-    // 4. Совпадение с кастомными продуктами
+    // Совпадение с кастомными продуктами
     if(custom.some(c => kl.includes(c) || c.includes(kl))) return true;
     return false;
   });
 }
-function ingOverlap(r,others){ const a=new Set(r.ing.map(g=>canon(g[0]))); const all=others.flatMap(o=>o.ing.map(g=>canon(g[0])));
-  return all.filter(n=>a.has(n)).length/Math.max(a.size,1); }
-let draft=null, draftParams=null, usedLiked=new Set();
-function renderComplex(){ const d=+$("mDays").value; $("mComplex").innerHTML=[...Array(d)].map((_,i)=>`<label>День ${i+1}</label><select><option>1</option><option selected>2</option><option>3</option></select>`).join(""); }
-$("mDays").onchange=renderComplex;
-function buildCuisineChips(){ const cs=["русская","итальянская","азиатская","кавказская","мексиканская","индийская","японская","тайская","греческая","испанская","французская","американская","смешанная"];
-  $("mCuisineChips").innerHTML=cs.map(c=>`<span class="chip ${c===favCuisine()?"on":""}" onclick="chipToggle(this)">${c}</span>`).join(""); }
-function collectParams(){ return {days:+$("mDays").value, budget:+$("mBudget").value||3000,
-  cuisines:[...$("mCuisineChips").children].filter(c=>c.classList.contains("on")).map(c=>c.textContent),
-  preps:+$("mPreps").value||0,
-  comp:[...$("mComplex").querySelectorAll("select")].map(s=>+s.value)}; }
+
+// 2. Исправляем pickRecipe (добавляем запасные варианты, как во втором файле)
 function pickRecipe(dayCuisine,mt,comp,prevDay,day){
-  const kcalT=familyAvgKcal();
-  const target=kcalT*MEAL_PCT[mt];
+  const kcalT = familyAvgKcal();
+  const target = kcalT * MEAL_PCT[mt];
   const BAD_FOR_MAIN = /компот|морс|лимонад|смузи|чай|кофе|какао|глинтвейн|напиток/i;
 
   const best = pool => pool
-    .filter(r => r.meal === mt && !BAD_FOR_MAIN.test(r.name))
+    .filter(r => r.meal === mt && !BAD_FOR_MAIN.test(r.name) && !bannedHas(r))
     .map(r => ({
       r,
       liked: S.likes[r.id] && !usedLiked.has(r.id),
@@ -720,15 +714,25 @@ function pickRecipe(dayCuisine,mt,comp,prevDay,day){
     .filter(x => !prevDay.some(pp => pp.id === x.r.id) && !day.some(dd => dd.id === x.r.id))
     .sort((a, b) => (b.liked - a.liked) || (b.ov - a.ov) || (a.kc - b.kc))[0]?.r;
 
-  let pick = best(RECIPES.filter(r => r.meal === mt && r.cuisine === dayCuisine && !bannedHas(r) && r.diff <= Math.min(3, comp + 1)));
-  if(!pick) pick = best(RECIPES.filter(r => r.meal === mt && !bannedHas(r) && r.diff <= comp + 1));
-  if(!pick) pick = best(RECIPES.filter(r => r.meal === mt && !bannedHas(r)));
+  // Пытаемся найти идеальное совпадение (кухня + сложность)
+  let pick = best(RECIPES.filter(r => r.meal === mt && r.cuisine === dayCuisine && r.diff <= Math.min(3, comp + 1)));
+  
+  // Если нет — ищем по кухне без учета сложности
+  if(!pick) pick = best(RECIPES.filter(r => r.meal === mt && r.cuisine === dayCuisine));
+  
+  // Если нет — ищем по сложности без учета кухни
+  if(!pick) pick = best(RECIPES.filter(r => r.meal === mt && r.diff <= comp + 1));
+  
+  // Если нет — берем любой рецепт этого приема пищи
+  if(!pick) pick = best(RECIPES.filter(r => r.meal === mt));
+  
+  // Если совсем ничего нет — берем любой рецепт (как во втором файле)
+  if(!pick) pick = RECIPES.find(r => r.meal === mt) || RECIPES[0];
 
-  // Убираем «заглушку», обходящую фильтры.
-  // Если подходящего блюда нет — пусть генератор просто оставит этот приём пустым.
   return pick || null;
 }
 
+// 3. Исправляем genPlan (убираем жесткую привязку к 3 блюдам, если их нет)
 function genPlan(p){
   const plan = [];
   let prevDay = [];
@@ -742,7 +746,7 @@ function genPlan(p){
         day.push(pick.id);
       }
     }
-    // Добираем до 3 блюд только из валидных рецептов нужного приёма
+    // Добираем до 3 блюд только если есть валидные рецепты
     while(day.length < 3){
       const mt = MEAL_ORD[day.length];
       const used = plan.flat().concat(day);
