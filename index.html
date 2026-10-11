@@ -262,30 +262,17 @@ const DEFAULT_RECIPES = [{"id": 1, "name": "Борщ", "cuisine": "русска�
 let RECIPES = DEFAULT_RECIPES.slice();
 /* Нормализация поля meal: приводим к z / o / u.
    Всё непонятное сваливаем в «ужин» (u). */
-const MEAL_ALIASES = {
-  // Завтрак
-  "z": "z", "завтрак": "z", "з": "z", "завтр": "z", "breakfast": "z", "утро": "z",
-  // Обед
-  "o": "o", "обед": "o", "о": "o", "об": "o", "lunch": "o", "дневной": "o",
-  // Ужин
-  "u": "u", "ужин": "u", "у": "u", "уж": "u", "dinner": "u", "вечер": "u", "полдник": "u", "перекус": "u"
-};
 
-function normalizeMeal(meal){
-  if(meal == null) return "u";
-  const key = String(meal).trim().toLowerCase();
-  if(MEAL_ALIASES[key]) return MEAL_ALIASES[key];
-  if(key.startsWith("завтр")) return "z";
-  if(key.startsWith("обед")) return "o";
-  if(key.startsWith("ужин")) return "u";
-  // Если это уже z/o/u с лишними символами — берём первую букву
-  const first = key[0];
-  if(first === "z" || first === "o" || first === "u") return first;
-  return "u"; // всё непонятное → ужин
-}
+/* Мягкая нормализация: не трогаем уже корректные значения,
+   а некорректные просто убираем из выбора (помечаем "x"). */
+RECIPES.forEach(r => {
+  const m = String(r.meal || "").trim().toLowerCase();
+  if(m === "z" || m === "завтрак" || m === "breakfast") r.meal = "z";
+  else if(m === "o" || m === "обед" || m === "lunch") r.meal = "o";
+  else if(m === "u" || m === "ужин" || m === "dinner") r.meal = "u";
+  else r.meal = "x";   // «непонятное» — не попадает ни в один приём
+});
 
-/* Применяем ко всем рецептам */
-RECIPES.forEach(r => { r.meal = normalizeMeal(r.meal); });
 const PRICES = {"свёкла": 60, "капуста": 40, "морковь": 45, "картофель": 50, "лук": 55, "говядина": 600, "сметана": 120, "томатная паста": 90, "творог": 260, "яйца": 110, "мука": 80, "сахар": 90, "гречка": 130, "фарш говяжий": 550, "фарш свиной": 480, "масло сливочное": 200, "огурцы": 130, "горошек консерв.": 100, "колбаса": 350, "майонез": 130, "макароны": 120, "бекон": 400, "сыр пармезан": 800, "сливки": 150, "моцарелла": 500, "томаты": 160, "базилик": 80, "масло оливковое": 450, "лазанья листы": 220, "рис": 140, "курица": 300, "соевый соус": 180, "ягоды": 250, "сыр сулугуни": 650, "кефир": 110, "чеснок": 120, "молоко": 90, "багет": 80, "сыр твёрдый": 500, "сыр фета": 300, "лаваш": 60, "масло растительное": 150, "арахис": 220, "кунжутное масло": 400, "рисовая лапша": 160, "тыква": 50, "банан": 100, "овсяные хлопья": 90, "мёд": 500, "манка": 70, "салат айсберг": 150, "горох": 120, "рыба": 350, "сушёный укроп": 80, "лавровый лист": 60, "пельмени": 300, "дрожжи": 40, "шампиньоны": 250, "фасоль консерв.": 130, "кукуруза консерв.": 120, "кабачки": 80, "перец болгарский": 150, "чечевица": 160, "имбирь": 300, "карри-паста": 250, "молоко кокосовое": 250, "йогурт": 120, "манго": 200, "мюсли": 200, "нори": 150, "лосось слабосолёный": 900, "лапша": 130, "зелёный лук": 100, "кунжут": 150, "тофу": 200, "мисо-паста": 400, "вакаме": 300, "креветки": 700, "лайм": 60, "чили-паста": 300, "рыбный соус": 250, "свинина": 450, "брокколи": 180, "баклажаны": 120, "лимон": 40, "булочки для бургеров": 60, "кетчуп": 150, "тортильи": 120, "паприка молотая": 150, "грецкий орех": 600, "виноградные листья": 200, "лосось": 800, "тесто слоёное": 180, "шпинат": 180, "соль": 40, "чёрный перец": 120};
 const UNIT_G_BASE = {"шт": 100, "порц": 250, "л": 1000, "мл": 1, "кг": 1000, "г": 1, "ст.л.": 15, "ч.л.": 5, "стакан": 250, "яйца": 55, "багет": 250, "лаваш": 120, "масло сливочное": 15, "моцарелла": 250, "сыр фета": 200, "сыр пармезан": 1000, "базилик": 30, "рисовая лапша": 200, "лазанья листы": 250, "горошек консерв.": 400, "майонез": 400, "соевый соус": 250, "томатная паста": 140, "сметана": 200, "сливки": 1000, "кефир": 1000, "молоко": 1000, "молоко кокосовое": 1000, "йогурт": 1000, "мёд": 25, "кунжут": 12, "дрожжи": 3, "сыр твёрдый": 1000, "фасоль консерв.": 400, "кукуруза консерв.": 400, "тортильи": 60, "булочки для бургеров": 70, "банан": 120, "манго": 300, "лайм": 60, "лимон": 80, "нори": 3, "тофу": 1000, "шампиньоны": 1000, "креветки": 1000, "рыба": 1000, "лосось": 1000, "лосось слабосолёный": 1000, "свинина": 1000, "говядина": 1000, "курица": 1000, "фарш говяжий": 1000, "фарш свиной": 1000, "бекон": 1000, "колбаса": 1000, "творог": 1000, "ягоды": 1000, "сыр сулугуни": 1000, "пельмени": 1000, "тесто слоёное": 1000, "виноградные листья": 400, "чеснок": 1000, "имбирь": 1000, "зелёный лук": 1000, "салат айсберг": 1000, "шпинат": 1000, "брокколи": 1000, "баклажаны": 1000, "кабачки": 1000, "перец болгарский": 1000, "тыква": 1000, "овсяные хлопья": 1000, "манка": 1000, "гречка": 1000, "рис": 1000, "макароны": 1000, "лапша": 1000, "мука": 1000, "сахар": 1000, "масло растительное": 1000, "масло оливковое": 1000, "кунжутное масло": 1000, "грецкий орех": 1000, "арахис": 1000, "горох": 1000, "чечевица": 1000, "вакаме": 1, "мисо-паста": 15, "карри-паста": 15, "чили-паста": 10, "рыбный соус": 15, "паприка молотая": 5, "сушёный укроп": 2, "лавровый лист": 1, "кетчуп": 300, "огурцы": 1000, "томаты": 1000, "картофель": 1000, "морковь": 1000, "лук": 1000, "капуста": 1000, "свёкла": 1000};
 /* Вес 1 ст.л. (15 мл) и 1 ч.л. (5 мл) в граммах для конкретных продуктов.
@@ -718,25 +705,61 @@ function collectParams(){ return {days:+$("mDays").value, budget:+$("mBudget").v
   preps:+$("mPreps").value||0,
   comp:[...$("mComplex").querySelectorAll("select")].map(s=>+s.value)}; }
 function pickRecipe(dayCuisine,mt,comp,prevDay,day){
-  const kcalT=familyAvgKcal(); const target=kcalT*MEAL_PCT[mt];
-  const best=pool=>pool.map(r=>({r,liked:S.likes[r.id]&&!usedLiked.has(r.id),ov:prevDay.length?ingOverlap(r,prevDay):0,kc:Math.abs(r.kcal-target)/target}))
-    .filter(x=>!prevDay.some(pp=>pp.id===x.r.id)&&!day.some(dd=>dd.id===x.r.id))
-    .sort((a,b)=>(b.liked-a.liked)||(b.ov-a.ov)||(a.kc-b.kc))[0]?.r;
-  let pick=best(RECIPES.filter(r=>r.meal===mt&&r.cuisine===dayCuisine&&!bannedHas(r)&&r.diff<=Math.min(3,comp+1)));
-  if(!pick) pick=best(RECIPES.filter(r=>r.meal===mt&&!bannedHas(r)&&r.diff<=comp+1));
-  if(!pick) pick=best(RECIPES.filter(r=>r.meal===mt&&!bannedHas(r)));
-  if(!pick) pick=best(RECIPES.filter(r=>!bannedHas(r)));
-  return pick||RECIPES.find(r=>r.meal===mt)||RECIPES[0];
+  const kcalT=familyAvgKcal();
+  const target=kcalT*MEAL_PCT[mt];
+  const BAD_FOR_MAIN = /компот|морс|лимонад|смузи|чай|кофе|какао|глинтвейн|напиток/i;
+
+  const best = pool => pool
+    .filter(r => r.meal === mt && !BAD_FOR_MAIN.test(r.name))
+    .map(r => ({
+      r,
+      liked: S.likes[r.id] && !usedLiked.has(r.id),
+      ov: prevDay.length ? ingOverlap(r, prevDay) : 0,
+      kc: Math.abs(r.kcal - target) / target
+    }))
+    .filter(x => !prevDay.some(pp => pp.id === x.r.id) && !day.some(dd => dd.id === x.r.id))
+    .sort((a, b) => (b.liked - a.liked) || (b.ov - a.ov) || (a.kc - b.kc))[0]?.r;
+
+  let pick = best(RECIPES.filter(r => r.meal === mt && r.cuisine === dayCuisine && !bannedHas(r) && r.diff <= Math.min(3, comp + 1)));
+  if(!pick) pick = best(RECIPES.filter(r => r.meal === mt && !bannedHas(r) && r.diff <= comp + 1));
+  if(!pick) pick = best(RECIPES.filter(r => r.meal === mt && !bannedHas(r)));
+
+  // Убираем «заглушку», обходящую фильтры.
+  // Если подходящего блюда нет — пусть генератор просто оставит этот приём пустым.
+  return pick || null;
 }
-function genPlan(p){ const plan=[]; let prevDay=[];
-  for(let d=0;d<p.days;d++){ const dayCuisine=p.cuisines[d%p.cuisines.length]; const day=[];
-    for(const mt of MEAL_ORD){ const pick=pickRecipe(dayCuisine,mt,p.comp[d],prevDay,day);
-      if(pick){ if(S.likes[pick.id])usedLiked.add(pick.id); day.push(pick.id); } }
-    while(day.length<3){ const used=plan.flat().concat(day);
-      const cand=RECIPES.filter(r=>r.meal===MEAL_ORD[day.length]&&!bannedHas(r)).sort((a,b)=>used.filter(x=>x===a.id).length-used.filter(x=>x===b.id).length)[0];
-      if(!cand)break; day.push(cand.id); }
-    plan.push(day); prevDay=day.map(rid=>getRecipe(rid)).filter(Boolean); }
-  return plan; }
+
+function genPlan(p){
+  const plan = [];
+  let prevDay = [];
+  for(let d = 0; d < p.days; d++){
+    const dayCuisine = p.cuisines[d % p.cuisines.length];
+    const day = [];
+    for(const mt of MEAL_ORD){
+      const pick = pickRecipe(dayCuisine, mt, p.comp[d], prevDay, day);
+      if(pick){
+        if(S.likes[pick.id]) usedLiked.add(pick.id);
+        day.push(pick.id);
+      }
+    }
+    // Добираем до 3 блюд только из валидных рецептов нужного приёма
+    while(day.length < 3){
+      const mt = MEAL_ORD[day.length];
+      const used = plan.flat().concat(day);
+      const cand = RECIPES
+        .filter(r => r.meal === mt && !bannedHas(r) && !day.includes(r.id))
+        .sort((a, b) =>
+          used.filter(x => x === a.id).length - used.filter(x => x === b.id).length
+        )[0];
+      if(!cand) break;
+      day.push(cand.id);
+    }
+    plan.push(day);
+    prevDay = day.map(rid => getRecipe(rid)).filter(Boolean);
+  }
+  return plan;
+}
+                              
 /* Стоимость меню: считаем недостающее (за вычетом того, что уже есть в холодильнике).
    Если fridge=true — учитываем остатки, если false — полная стоимость. */
 /* Безопасная цена продукта за 1 кг (или за штуку для PIECE) */
