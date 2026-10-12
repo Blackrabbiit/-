@@ -142,9 +142,7 @@ textarea{min-height:70px;resize:vertical}
   <div class="card">
     <div class="section-title">⏰ Использовать в первую очередь</div>
     <div id="expiringList"></div>
-    <div class="section-title" style="margin-top:16px">✨ Попробовать новое <span class="hint">(нажмите на блюдо — откроется рецепт)</span></div>
-    <div id="newList"></div>
-  </div>
+    </div>
 </main>
 
 <div id="overlay"></div>
@@ -272,6 +270,89 @@ RECIPES.forEach(r => {
 });
 
 const PRICES = {"свёкла": 60, "капуста": 40, "морковь": 45, "картофель": 50, "лук": 55, "говядина": 600, "сметана": 120, "томатная паста": 90, "творог": 260, "яйца": 110, "мука": 80, "сахар": 90, "гречка": 130, "фарш говяжий": 550, "фарш свиной": 480, "масло сливочное": 200, "огурцы": 130, "горошек консерв.": 100, "колбаса": 350, "майонез": 130, "макароны": 120, "бекон": 400, "сыр пармезан": 800, "сливки": 150, "моцарелла": 500, "томаты": 160, "базилик": 80, "масло оливковое": 450, "лазанья листы": 220, "рис": 140, "курица": 300, "соевый соус": 180, "ягоды": 250, "сыр сулугуни": 650, "кефир": 110, "чеснок": 120, "молоко": 90, "багет": 80, "сыр твёрдый": 500, "сыр фета": 300, "лаваш": 60, "масло растительное": 150, "арахис": 220, "кунжутное масло": 400, "рисовая лапша": 160, "тыква": 50, "банан": 100, "овсяные хлопья": 90, "мёд": 500, "манка": 70, "салат айсберг": 150, "горох": 120, "рыба": 350, "сушёный укроп": 80, "лавровый лист": 60, "пельмени": 300, "дрожжи": 40, "шампиньоны": 250, "фасоль консерв.": 130, "кукуруза консерв.": 120, "кабачки": 80, "перец болгарский": 150, "чечевица": 160, "имбирь": 300, "карри-паста": 250, "молоко кокосовое": 250, "йогурт": 120, "манго": 200, "мюсли": 200, "нори": 150, "лосось слабосолёный": 900, "лапша": 130, "зелёный лук": 100, "кунжут": 150, "тофу": 200, "мисо-паста": 400, "вакаме": 300, "креветки": 700, "лайм": 60, "чили-паста": 300, "рыбный соус": 250, "свинина": 450, "брокколи": 180, "баклажаны": 120, "лимон": 40, "булочки для бургеров": 60, "кетчуп": 150, "тортильи": 120, "паприка молотая": 150, "грецкий орех": 600, "виноградные листья": 200, "лосось": 800, "тесто слоёное": 180, "шпинат": 180, "соль": 40, "чёрный перец": 120};
+// Фасовки в магазине: [граммы_фасовки, цена_за_фасовку]
+// Если продукт продаётся только пачкой — берём ceil от нужного веса.
+const PACKS = {
+  "сыр пармезан":      [[100, 180], [200, 320]],
+  "сыр твёрдый":       [[200, 180], [400, 320]],
+  "сыр фета":          [[200, 220]],
+  "моцарелла":         [[125, 130], [250, 240]],
+  "сыр сулугуни":      [[300, 280]],
+  "творог":            [[200, 130], [400, 220]],
+  "сметана":           [[200, 90],  [400, 160]],
+  "сливки":            [[200, 80],  [500, 170]],
+  "молоко":            [[900, 90],  [1800, 160]],
+  "кефир":             [[900, 90],  [1800, 160]],
+  "йогурт":            [[300, 70],  [900, 180]],
+  "масло сливочное":   [[180, 200]],
+  "масло оливковое":   [[500, 450]],
+  "масло растительное":[[900, 150]],
+  "яйца":              [[10, 110]],  // 10 шт
+  "курица":            [[1000, 300], [1500, 420]],
+  "говядина":          [[500, 350], [1000, 650]],
+  "свинина":           [[500, 250], [1000, 470]],
+  "фарш говяжий":      [[400, 240], [800, 430]],
+  "фарш свиной":       [[400, 200], [800, 370]],
+  "бекон":             [[200, 160]],
+  "колбаса":           [[400, 180]],
+  "рыба":              [[500, 250], [1000, 450]],
+  "лосось":            [[300, 350]],
+  "креветки":          [[300, 350]],
+  "пельмени":          [[500, 220], [900, 380]],
+  "мука":              [[2000, 130]],
+  "сахар":             [[1000, 90]],
+  "рис":               [[900, 140]],
+  "гречка":            [[900, 130]],
+  "макароны":          [[450, 120]],
+  "лапша":             [[300, 130]],
+  "рисовая лапша":     [[200, 160]],
+  "томаты":            [[500, 130], [1000, 240]],
+  "огурцы":            [[500, 110]],
+  "картофель":         [[1000, 60]],
+  "морковь":           [[500, 40]],
+  "лук":               [[500, 45]],
+  "капуста":           [[1000, 50]],
+  "свёкла":            [[500, 45]],
+  "багет":             [[250, 80]],
+  "лаваш":             [[120, 60]],
+  "тортильи":          [[240, 120]],
+  "булочки для бургеров":[[240, 90]],
+  "банан":             [[1000, 100]],
+  "ягоды":             [[300, 250]],
+  "шампиньоны":        [[400, 200]],
+  "горошек консерв.":  [[400, 100]],
+  "фасоль консерв.":   [[400, 130]],
+  "кукуруза консерв.": [[340, 120]],
+  "хлеб":              [[400, 60]],
+  "тесто слоёное":     [[400, 180]],
+  "виноградные листья":[[400, 200]],
+  "баклажаны":         [[500, 120]],
+  "кабачки":           [[500, 80]],
+  "перец болгарский":  [[500, 150]],
+  "помидоры":          [[500, 130]],
+  "шпинат":            [[300, 180]],
+  "брокколи":          [[400, 180]],
+};
+
+// Возвращает реальную стоимость продукта с учётом фасовок
+function packPrice(n, g){
+  const k = canon(n);
+  const packs = PACKS[k];
+  if(!packs){
+    // Нет данных — используем старую цену за кг, но округляем до 100 г
+    const perKg = priceOf(k);
+    const rounded = Math.max(100, Math.ceil(g / 100) * 100);
+    return perKg * rounded / 1000;
+  }
+  // Ищем минимальную стоимость набора фасовок, дающего >= g
+  let best = Infinity;
+  packs.forEach(([packG, packPrice]) => {
+    const count = Math.max(1, Math.ceil(g / packG));
+    const cost = count * packPrice;
+    if(cost < best) best = cost;
+  });
+  return best;
+}
 const UNIT_G_BASE = {"шт": 100, "порц": 250, "л": 1000, "мл": 1, "кг": 1000, "г": 1, "ст.л.": 15, "ч.л.": 5, "стакан": 250, "яйца": 55, "багет": 250, "лаваш": 120, "масло сливочное": 15, "моцарелла": 250, "сыр фета": 200, "сыр пармезан": 1000, "базилик": 30, "рисовая лапша": 200, "лазанья листы": 250, "горошек консерв.": 400, "майонез": 400, "соевый соус": 250, "томатная паста": 140, "сметана": 200, "сливки": 1000, "кефир": 1000, "молоко": 1000, "молоко кокосовое": 1000, "йогурт": 1000, "мёд": 25, "кунжут": 12, "дрожжи": 3, "сыр твёрдый": 1000, "фасоль консерв.": 400, "кукуруза консерв.": 400, "тортильи": 60, "булочки для бургеров": 70, "банан": 120, "манго": 300, "лайм": 60, "лимон": 80, "нори": 3, "тофу": 1000, "шампиньоны": 1000, "креветки": 1000, "рыба": 1000, "лосось": 1000, "лосось слабосолёный": 1000, "свинина": 1000, "говядина": 1000, "курица": 1000, "фарш говяжий": 1000, "фарш свиной": 1000, "бекон": 1000, "колбаса": 1000, "творог": 1000, "ягоды": 1000, "сыр сулугуни": 1000, "пельмени": 1000, "тесто слоёное": 1000, "виноградные листья": 400, "чеснок": 1000, "имбирь": 1000, "зелёный лук": 1000, "салат айсберг": 1000, "шпинат": 1000, "брокколи": 1000, "баклажаны": 1000, "кабачки": 1000, "перец болгарский": 1000, "тыква": 1000, "овсяные хлопья": 1000, "манка": 1000, "гречка": 1000, "рис": 1000, "макароны": 1000, "лапша": 1000, "мука": 1000, "сахар": 1000, "масло растительное": 1000, "масло оливковое": 1000, "кунжутное масло": 1000, "грецкий орех": 1000, "арахис": 1000, "горох": 1000, "чечевица": 1000, "вакаме": 1, "мисо-паста": 15, "карри-паста": 15, "чили-паста": 10, "рыбный соус": 15, "паприка молотая": 5, "сушёный укроп": 2, "лавровый лист": 1, "кетчуп": 300, "огурцы": 1000, "томаты": 1000, "картофель": 1000, "морковь": 1000, "лук": 1000, "капуста": 1000, "свёкла": 1000};
 const SPOON_WEIGHT = {
   "мука": { "ст.л.": 25, "ч.л.": 8 }, "сахар": { "ст.л.": 25, "ч.л.": 8 }, "соль": { "ст.л.": 30, "ч.л.": 10 },
@@ -449,7 +530,7 @@ function renderFridge(){
       <button class="btn small" onclick="editFridge(${i.id})">✎</button>
       <button class="btn small danger" onclick="trashItem(${i.id})">✕</button></div>`;}).join("");
   $("fridgeList").innerHTML=html||'<p class="hint">Пусто. Добавьте продукты выше.</p>';
-  renderExpiring(raw.concat(cooked)); renderNew(); }
+  renderExpiring(raw); }
 function editFridge(id){ const f=S.fridge.find(x=>x.id===id); if(!f)return;
   const nm=prompt("Название:",f.name); if(nm===null)return; f.name=nm.trim()||f.name;
   const q=prompt("Количество:",f.qty); if(q!==null) f.qty=+q||f.qty;
@@ -457,31 +538,120 @@ function editFridge(id){ const f=S.fridge.find(x=>x.id===id); if(!f)return;
   const d=prompt("Срок годности, дней:",f.shelf); if(d!==null) f.shelf=+d||f.shelf;
   save(); renderFridge(); }
 function trashItem(id){ S.fridge=S.fridge.filter(f=>f.id!==id); save(); renderFridge(); renderCart(); }
-function eatCooked(id){ const f=S.fridge.find(x=>x.id===id); if(!f)return;
-  const who=S.survey?.people[S.member]?.name||"гость";
-  const rid=f.rid||null; const kcal=f.kcal||null;
-  f.qty=Math.max(0,+(f.qty-1).toFixed(1));
-  S.cooked.push({rid,label:f.name,kcal,date:todayStr(),who});
-  if(f.qty<=0){ S.fridge=S.fridge.filter(x=>x!==f); }
-  save(); renderFridge(); renderAdvice(S.survey?.people[S.member]);
-  alert(`Съедено: «${f.name.replace("Готовое: ","")}». Осталось: ${f.qty>0?f.qty+" порц":"0"}.`); }
+function eatCooked(id){
+  const f = S.fridge.find(x => x.id === id);
+  if(!f) return;
+  const who = S.survey?.people[S.member]?.name || "гость";
+  const rid = f.rid || null;
+  const kcal = f.kcal || null;
+  f.qty = Math.max(0, +(f.qty - 1).toFixed(1));
+
+  // Отмечаем в меню, если блюдо привязано к рецепту
+  if(rid && S.activeMenuId){
+    const m = S.menus.find(x => x.id === S.activeMenuId);
+    if(m){
+      const st = mState(m);
+      outer:
+      for(let d = 0; d < m.plan.length; d++){
+        for(let mi = 0; mi < 3; mi++){
+          if(m.plan[d][mi] === rid){
+            const key = mealKey(d, MEAL_ORD[mi]);
+            if(!st[key] || !st[key].eaten){
+              st[key] = { eaten: true };
+              S.cooked.push({ rid, menuId: m.id, date: todayStr(), who, kcal });
+              break outer;
+            }
+          }
+        }
+      }
+    }
+  } else {
+    S.cooked.push({ rid, label: f.name, kcal, date: todayStr(), who });
+  }
+
+  if(f.qty <= 0) S.fridge = S.fridge.filter(x => x !== f);
+  save(); renderFridge(); renderMenusMain();
+  renderAdvice(S.survey?.people[S.member]);
+  alert(`Съедено: «${f.name.replace("Готовое: ","")}». Осталось: ${f.qty > 0 ? f.qty + " порц." : "0"}.`);
+}
 
 /* ============ ПРЕДЛОЖИТЬ БЛЮДА ============ */
 function favCuisine(){ const cnt={}; S.menus.forEach(m=>m.plan.flat().forEach(rid=>{const r=getRecipe(rid); if(r){cnt[r.cuisine]=(cnt[r.cuisine]||0)+1}}));
   return Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0]?.[0]||"русская"; }
-function renderExpiring(list){ const exp=list.filter(i=>fridgeLeft(i)<=3&&!i.name.startsWith("Готовое:"));
-  if(!exp.length){ $("expiringList").innerHTML='<p class="hint">Скоропорта нет 👍</p>'; return; }
-  $("expiringList").innerHTML=exp.map(i=>{
-    const all=RECIPES.filter(r=>r.ing.some(g=>canon(g[0])===canon(i.name)||canon(g[0]).includes(canon(i.name))||canon(i.name).includes(canon(g[0]))));
-    const recs=all.slice(0,6);
-    return `<div class="recipe-mini" onclick="this.classList.toggle('expanded')">
-      <b>${i.name}</b> (${i.qty} ${i.unit}, до ${fridgeLeft(i)} дн.)
-      <div class="hint">→ ${recs.map(r=>r.name).slice(0,3).join(", ")||"нет блюд"}${recs.length>3?"…":""}</div>
-      <div class="details">
-        ${recs.map(r=>`<div class="ing-line"><span>${r.name} <em class="hint">(${r.cuisine})</em></span>
-          <span><button class="btn small" onclick="event.stopPropagation();openRecipe(${r.id},{})">Открыть</button></span></div>`).join("")}
-        ${S.activeMenuId?`<p class="hint" style="margin-top:6px">Заменить блюдо в основном меню:</p>${recs.slice(0,4).map(r=>`<button class="btn small warm" style="margin:2px" onclick="event.stopPropagation();replaceInMenu(${r.id})">🔄 ${r.name}</button>`).join("")}`:""}
-      </div></div>`;}).join(""); }
+function expiringIngredients(days){
+  return S.fridge.filter(f =>
+    !f.name.startsWith("Готовое:") &&
+    fridgeLeft(f) <= days
+  );
+}
+function scoreRecipeByExpiring(r, expSet){
+  let hits = 0, matched = [];
+  r.ing.forEach(([n]) => {
+    const k = canon(n);
+    if(expSet.has(k)){ hits++; matched.push(k); }
+  });
+  return { hits, matched };
+}
+let expiringOffset = 0;
+
+function renderExpiring(list){
+  const exp = expiringIngredients(3);
+  const expSet = new Set(exp.map(f => canon(f.name)));
+  const expNames = {};
+  exp.forEach(f => { expNames[canon(f.name)] = fridgeLeft(f); });
+
+  if(!exp.length){
+    $("expiringList").innerHTML = '<p class="hint">Скоропорта нет 👍</p>';
+    return;
+  }
+
+  // Все рецепты, где есть хоть один истекающий ингредиент
+  const all = RECIPES
+    .map(r => ({ r, ...scoreRecipeByExpiring(r, expSet) }))
+    .filter(x => x.hits > 0)
+    .sort((a, b) => b.hits - a.hits);
+
+  if(!all.length){
+    $("expiringList").innerHTML = '<p class="hint">Продукты есть, но подходящих рецептов не нашлось.</p>';
+    return;
+  }
+
+  // 4 блюда с перегенерацией
+  const pageSize = 4;
+  const total = all.length;
+  const start = expiringOffset % total;
+  const page = [];
+  for(let i = 0; i < Math.min(pageSize, total); i++){
+    page.push(all[(start + i) % total]);
+  }
+
+  const best = page[0]; // лучший по количеству скоропорта
+
+  $("expiringList").innerHTML =
+    `<p class="hint">Истекает: ${exp.map(f =>
+      `${f.name} (${fridgeLeft(f)} дн.)`).join(", ")}</p>`
+    + page.map(({ r, matched }, i) => {
+        const isBest = (r.id === best.r.id);
+        const chips = matched.map(n => {
+          const d = expNames[n];
+          return `<span class="tag warm" style="margin:1px">${n} · ${d} дн.</span>`;
+        }).join("");
+        return `<div class="recipe-mini" onclick="openRecipe(${r.id},{})"
+          style="${isBest ? "border:2px solid var(--accent2);background:var(--accent2-soft)" : ""}">
+          <span class="like" onclick="event.stopPropagation();toggleLike(${r.id},this)">${S.likes[r.id] ? "❤️" : "🤍"}</span>
+          <h4>${r.name}</h4>
+          <div class="hint">${MEAL_NAME[r.meal]} · ${r.cuisine} · ${r.time} мин · ${r.kcal} ккал</div>
+          <div style="margin-top:6px">Использует: ${chips || '<span class="hint">—</span>'}</div>
+          <div class="hint" style="margin-top:4px">Скоропорта: <b>${matched.length}</b></div>
+        </div>`;
+      }).join("")
+    + `<button class="btn" style="width:100%;margin-top:8px"
+        onclick="expiringOffset += ${pageSize}; renderExpiring(fridgeRaw())">↻ Другие 4 блюда</button>`;
+}
+
+function fridgeRaw(){
+  return S.fridge.filter(f => !f.name.startsWith("Готовое:"));
+}
 function replaceInMenu(rid){ if(!S.activeMenuId){alert("Сначала назначьте основное меню.");return;}
   const m=S.menus.find(x=>x.id===S.activeMenuId); if(!m)return;
   const day=+prompt(`День (1–${m.plan.length}):`,1)-1; if(isNaN(day)||day<0||day>=m.plan.length)return;
@@ -495,17 +665,53 @@ function renderNew(){ const fresh=RECIPES.filter(r=>!S.cooked.some(c=>c.rid===r.
 function toggleLike(id,el){ S.likes[id]=!S.likes[id]; save(); if(el) el.textContent=S.likes[id]?"❤️":"🤍"; }
 
 /* ============ МОДАЛ РЕЦЕПТА ============ */
-function ingLineHTML([n,u,q]){ const g=toGrams(n,u,q);
-  return `<div class="ing-line"><span>${n} — ${q} ${u}</span><span class="g">≈ ${gDisplay(n,g)}</span></div>`; }
-function openRecipe(rid,ctx){ const r=getRecipe(rid); if(!r)return;
-  const ingRows=r.ing.map(ingLineHTML).join("");
-  const ck=findCooked(r);
-  const notes=S.recipeNotes[rid]||"";
-  let actions="";
-  if(ctx.menuId!==undefined){ const m=S.menus.find(x=>x.id===ctx.menuId);
-    const fin=isFinished(ctx.menuId,ctx.day,ctx.meal);
-    const sug=suggestCook(r,m,ctx.day);
-    actions=`<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
+function ingLineHTML([n,u,q], rid){
+  const k = canon(n);
+  const g = toGrams(n,u,q);
+  const have = haveG(k);
+  const enough = have >= g;
+  const id = `ing-${rid}-${k.replace(/\s/g,"_")}`;
+  return `<div class="ing-line" style="align-items:center">
+    <span style="display:flex;align-items:center;gap:6px">
+      <input type="checkbox" class="ing-check" id="${id}"
+        ${enough ? "checked" : ""}
+        ${enough ? 'title="Уже есть в холодильнике"' : 'title="Нужно докупить"'}>
+      <label for="${id}" style="margin:0;cursor:pointer">${n} — ${q} ${u}</label>
+    </span>
+    <span class="g">≈ ${gDisplay(n,g)}${enough
+      ? ` <span style="color:var(--green)">(есть ${gDisplay(n,have)})</span>`
+      : ` <span style="color:var(--red)">(нет, нужно ${gDisplay(n,Math.max(0,g-have))})</span>`}</span>
+  </div>`;
+}
+
+function openRecipe(rid, ctx){
+  const r = getRecipe(rid); if(!r) return;
+  const ingRows = r.ing.map(ing => ingLineHTML(ing, rid)).join("");
+  const ck = findCooked(r);
+  const notes = S.recipeNotes[rid] || "";
+
+  // Заготовка — прямо рядом с ингредиентами
+  let prepBlock = "";
+  if(r.prep){
+    const st = S.prepStock.find(p => p.name === r.prep.name);
+    prepBlock = `<div style="margin-top:10px;padding:10px;border:1px dashed var(--line);border-radius:12px;background:var(--accent-soft)">
+      <b>📦 Заготовка: ${r.prep.name}</b>
+      <div class="hint">${r.prep.qty} ${r.prep.unit} · хранить ${r.prep.frozen} дн. · ${prepPlace(r.prep.name)}</div>
+      ${st
+        ? `<div class="hint" style="color:var(--green)">✅ В запасе: ${st.qty.toFixed(0)} ${st.unit} (${Math.max(0, Math.ceil((st.expires-now())/DAY))} дн.)</div>`
+        : `<button class="btn small primary" style="margin-top:6px"
+             onclick="makePrep('${r.prep.name.replace(/'/g,"\\'")}',${r.prep.qty},'${r.prep.unit}',${r.prep.frozen})">
+             + Сделать заготовку
+           </button>`}
+    </div>`;
+  }
+
+  let actions = "";
+  if(ctx.menuId !== undefined){
+    const m = S.menus.find(x => x.id === ctx.menuId);
+    const fin = isFinished(ctx.menuId, ctx.day, ctx.meal);
+    const sug = suggestCook(r, m, ctx.day);
+    actions = `<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
       <p class="hint">Блюдо встречается ещё <b>${sug.occ}</b> раз(а), едят <b>${familySize()}</b> чел. Рекомендуется приготовить <b>${sug.qty} порц.</b> (хранится ${r.cookedShelf||2} дн.)${sug.capped?" — больше не доживёт":""}.</p>
       <label>Приготовить на (дней):</label>
       <select id="cookDays"><option value="1">1 день</option><option value="2">2 дня</option><option value="3">3 дня</option></select>
@@ -517,17 +723,24 @@ function openRecipe(rid,ctx){ const r=getRecipe(rid); if(!r)return;
       <button class="btn primary" style="width:100%;margin-top:8px" onclick="eatDish(${ctx.menuId},${ctx.day},'${ctx.meal}')" ${fin?"disabled":""}>🍽 Съедено (1 порция)</button>
       ${ck?`<p class="hint" style="margin-top:6px">В холодильнике уже есть: ${ck.qty} порц. (до ${fridgeLeft(ck)} дн.)</p>`:""}
       ${fin?'<p class="hint" style="margin-top:6px">Этот приём пищи уже отмечен.</p>':""}
-    </div>`; }
-  if(ctx.fromNew){ actions=`<button class="btn warm" style="width:100%;margin-top:12px" onclick="toggleLike(${rid});openRecipe(${rid},{fromNew:true})">${S.likes[rid]?"❤️ В любимых":"🤍 Лайкнуть"}</button>`; }
-  $("modalBox").innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-start"><h2>${r.name}</h2><button class="btn small" onclick="closeModal()">✕</button></div>
-    <p class="hint">${MEAL_NAME[r.meal]} · ${r.cuisine} · ${r.time} мин · сложность ${"★".repeat(r.diff)}${"☆".repeat(3-r.diff)} · ${r.kcal} ккал/порцию · ${r.portions||4} порций в рецепте</p>
-    <div class="section-title" style="margin-top:12px">Ингредиенты на всё блюдо</div>${ingRows}
-    ${r.prep?`<p class="hint" style="margin-top:10px">📦 Есть заготовка: «${r.prep.name}» (${r.prep.qty} ${r.prep.unit}, морозилка ${r.prep.frozen} дн.)</p>`:""}
+    </div>`;
+  }
+
+  $("modalBox").innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <h2>${r.name}</h2>
+      <button class="btn small" onclick="closeModal()">✕</button>
+    </div>
+    <p class="hint">${MEAL_NAME[r.meal]} · ${r.cuisine} · ${r.time} мин · сложность ${"★".repeat(diffByTime(r))} · ${r.kcal} ккал/порцию · ${r.portions||4} порций в рецепте</p>
+    <div class="section-title" style="margin-top:12px">Ингредиенты на всё блюдо</div>
+    ${ingRows}
+    ${prepBlock}
     <div class="section-title" style="margin-top:14px">📝 Мои заметки к рецепту</div>
     <textarea id="recipeNotes" placeholder="Шаги приготовления, тонкости…">${notes.replace(/</g,"&lt;")}</textarea>
     <button class="btn small primary" style="margin-top:6px" onclick="saveRecipeNotes(${rid})">Сохранить заметки</button>
     ${actions}`;
-  $("modal").classList.add("show"); }
+  $("modal").classList.add("show");
+}
 function saveRecipeNotes(rid){ S.recipeNotes[rid]=$("recipeNotes").value; save(); alert("Заметки сохранены."); }
 function closeModal(){ $("modal").classList.remove("show"); }
 $("modal").onclick=e=>{ if(e.target.id==="modal") closeModal(); };
@@ -617,7 +830,7 @@ function renderMenusMain(){ $("menusMain").innerHTML=S.menus.map(m=>{
         return `<div class="day"><h4><span>День ${d+1} · ${m.cuisines[d%m.cuisines.length]}</span><span>~${mins} мин</span></h4>
         ${day.map((rid,mi)=>{const r=getRecipe(rid); if(!r)return ""; const mt=MEAL_ORD[mi];const st=mealStatus(m,d,mt);const ck=findCooked(r);
           return `<div class="meal ${st!=="planned"?"done":""}"><b onclick="openRecipe(${r.id},{menuId:${m.id},day:${d},meal:'${mt}'})">${r.name}</b>
-          <span class="meta">${r.kcal} ккал · ${r.time} мин · ★${r.diff}</span>
+          <span class="meta">${r.kcal} ккал · ${r.time} мин · ★${diffByTime(r)}</span>
           <span class="repl" onclick="event.stopPropagation();quickReplace(${m.id},${d},'${mt}')">🔄 заменить</span>
           ${st==="eaten"?'<span class="tag green">съедено</span>':st==="skipped"?'<span class="tag">пропущен</span>':(ck?`<span class="portions-left">в хол-ке: ${ck.qty} порц.</span>`:"")}</div>`;}).join("")}</div>`}).join("")}
     </div></div>`;}).join("")||'<p class="hint">Меню пока нет. Откройте «☰ Действия» → «1. Меню» → «Сгенерировать».</p>'; }
@@ -806,19 +1019,37 @@ function genPlan(p){
 }
 
 function priceOf(n){ const k = canon(n); const p = PRICES[k]; if(typeof p === "number" && isFinite(p)) return p; return 100; }
-function recipeCost(rid, useFridge=true){ const r = getRecipe(rid); if(!r || !r.ing) return 0;
+function recipeCost(rid, useFridge = true){
+  const r = getRecipe(rid); if(!r || !r.ing) return 0;
   let total = 0;
-  r.ing.forEach(([n,u,q])=>{ const g = toGrams(n,u,q); if(!isFinite(g) || g <= 0) return;
+  r.ing.forEach(([n,u,q]) => {
+    const g = toGrams(n,u,q);
+    if(!isFinite(g) || g <= 0) return;
     const have = useFridge ? haveG(n) : 0;
-    total += (Math.max(0, g - have) / 1000) * priceOf(n); });
-  return Math.round(total); }
-function menuCost(m, useFridge=true){ if(!m || !m.plan) return 0;
+    total += packPrice(n, Math.max(0, g - have));
+  });
+  return Math.round(total);
+}
+function menuCost(m, useFridge = true){
+  if(!m || !m.plan) return 0;
   const need = {};
-  m.plan.flat().forEach(rid=>{ const r = getRecipe(rid); if(!r || !r.ing) return;
-    r.ing.forEach(([n,u,q])=>{ const k = canon(n); const g = toGrams(n,u,q); if(!isFinite(g) || g <= 0) return; need[k] = (need[k]||0) + g; }); });
+  m.plan.flat().forEach(rid => {
+    const r = getRecipe(rid); if(!r || !r.ing) return;
+    r.ing.forEach(([n,u,q]) => {
+      const k = canon(n);
+      const g = toGrams(n,u,q);
+      if(!isFinite(g) || g <= 0) return;
+      need[k] = (need[k] || 0) + g;
+    });
+  });
   let total = 0;
-  Object.entries(need).forEach(([n,g])=>{ const have = useFridge ? haveG(n) : 0; total += (Math.max(0, g - have) / 1000) * priceOf(n); });
-  return Math.round(total); }
+  Object.entries(need).forEach(([n,g]) => {
+    const have = useFridge ? haveG(n) : 0;
+    const lack = Math.max(0, g - have);
+    total += packPrice(n, lack);
+  });
+  return Math.round(total);
+}
 function dayCost(m, d, useFridge=true){ if(!m || !m.plan[d]) return 0; return m.plan[d].reduce((s,rid)=>s+recipeCost(rid, useFridge), 0); }
 
 function tryGen(){ const p=collectParams();
@@ -888,7 +1119,7 @@ function renderDraft(extra=""){
             if(!r) return "";
             const rc = recipeCost(rid);
             return `<div class="meal">${MEAL_NAME[mt]}: <b onclick="openRecipe(${r.id},{})">${r.name}</b>${S.likes[r.id]?' <span class="tag warm">❤️</span>':""}
-              <span class="meta">${r.kcal} ккал · ${r.time} мин · ★${r.diff} · ${rc} ₽</span>
+              <span class="meta">${r.kcal} ккал · ${r.time} мин · ★${diffByTime(r)} · ${rc} ₽</span>
               <span class="repl" onclick="replaceDraft(${d},${mi})">🔄 заменить</span>
               <span class="repl" onclick="replaceCheap(${d},${mi})">💸 дешевле</span></div>`;
           }).join("")}
@@ -984,24 +1215,94 @@ function cartBuy(mid){ const m=S.menus.find(x=>x.id===mid); if(!m)return;
   save(); renderFridge(); renderCart(); alert("Купленное добавлено в холодильник."); }
 
 /* ============ ЗАГОТОВКИ ============ */
-function prepPlace(name){ return /бульон|соус|суп/i.test(name)?"морозилка":"морозилка"; }
-function renderPreps(){ const sel=$("prepMenuSel"); if(!sel)return; const m=S.menus.find(x=>x.id==sel.value);
-  if(!m){$("prepNeed").innerHTML='<p class="hint">Сначала сохраните меню.</p>';} else {
-    const cnt={}; m.plan.flat().forEach(rid=>{const r=getRecipe(rid); if(r&&r.prep){ const k=r.prep.name; cnt[k]=cnt[k]||{...r.prep,qty:0,days:[]}; cnt[k].qty+=r.prep.qty; cnt[k].days.push(r.name); } });
-    $("prepNeed").innerHTML=Object.values(cnt).map(p=>{const st=S.prepStock.find(x=>x.name===p.name);
-      const left=st?Math.max(0,Math.floor((st.expires-now())/DAY)):0;
-      return `<div class="recipe-mini" onclick="showPrepRecipe('${p.name.replace(/'/g,"\\'")}')"><b>${p.name}</b> — нужно ${p.qty} ${p.unit} <span class="hint">(${[...new Set(p.days)].join(", ")})</span><br>
-      <span class="hint">Хранить: ${prepPlace(p.name)}</span><br>
-      ${st?`<span class="tag green">✅ ${st.qty.toFixed(0)} ${st.unit} · ${left} дн.</span>`
-      :`<button class="btn small primary" onclick="event.stopPropagation();makePrep('${p.name.replace(/'/g,"\\'")}',${p.qty},'${p.unit}',${p.frozen})">⬜ Сделать заготовку</button>`}</div>`;}).join("")||'<p class="hint">В этом меню блюд с заготовками нет.</p>'; }
-  $("prepUniversal").innerHTML=UNIVERSAL_PREPS.map(p=>{const st=S.prepStock.find(x=>x.name===p[0]);
-    return `<div class="fridge-item" style="cursor:pointer" onclick="showPrepRecipe('${p[0].replace(/'/g,"\\'")}')"><b>${p[0]}</b><span class="qty">${p[1]} ${p[2]} · ${p[3]} дн. · ${prepPlace(p[0])}</span>
-    ${st?`<span class="tag green">✅ ${st.qty} ${st.unit}</span>`:`<button class="btn small" onclick="event.stopPropagation();makePrep('${p[0].replace(/'/g,"\\'")}',${p[1]},'${p[2]}',${p[3]})">+ добавить</button>`}</div>`;}).join("");
-  $("prepStock").innerHTML=S.prepStock.map((p,i)=>{const left=Math.max(0,Math.ceil((p.expires-now())/DAY));
-    return `<div class="fridge-item" style="cursor:pointer" onclick="showPrepRecipe('${p.name.replace(/'/g,"\\'")}')"><b>${p.name}</b><span class="qty">${p.qty.toFixed(0)} ${p.unit} · ${left} дн. · ${prepPlace(p.name)}</span>
-    <button class="btn small" onclick="event.stopPropagation();editPrep(${i})">✎</button>
-    <button class="btn small danger" onclick="event.stopPropagation();S.prepStock.splice(${i},1);save();renderPreps()">✕</button></div>`;}).join("")||'<p class="hint">Заготовок нет.</p>'; }
-$("prepMenuSel").onchange=renderPreps;
+// Определяем, где хранится заготовка: холодильник или морозилка
+function prepPlace(name){
+  const n = name.toLowerCase();
+  // Скоропорт: в холодильник
+  if(/бульон|отваренные макароны|отваренный рис|зажарка|пережарка/.test(n)) return "холодильник";
+  // Всё остальное — морозилка
+  return "морозилка";
+}
+function prepFridgeShelf(name){
+  if(/бульон/.test(name)) return 4;
+  if(/макароны|рис/.test(name)) return 2;
+  if(/зажарка|пережарка/.test(name)) return 4;
+  return 0;
+}
+function renderPreps(){
+  const sel = $("prepMenuSel"); if(!sel) return;
+  const m = S.menus.find(x => x.id == sel.value);
+  if(!m){
+    $("prepNeed").innerHTML = '<p class="hint">Сначала сохраните меню.</p>';
+  } else {
+    const cnt = {};
+    m.plan.flat().forEach(rid => {
+      const r = getRecipe(rid);
+      if(r && r.prep){
+        const k = r.prep.name;
+        cnt[k] = cnt[k] || { ...r.prep, qty:0, days:[] };
+        cnt[k].qty += r.prep.qty;
+        cnt[k].days.push(r.name);
+      }
+    });
+    const items = Object.values(cnt);
+    if(!items.length){
+      $("prepNeed").innerHTML = '<p class="hint">В этом меню блюд с заготовками нет.</p>';
+    } else {
+      // Группируем по сроку хранения (морозилка): 0–30, 31–60, 61–120, >120
+      const groups = [
+        { label:"До 30 дней",        min:0,   max:30  },
+        { label:"31–60 дней",        min:31,  max:60  },
+        { label:"61–120 дней",       min:61,  max:120 },
+        { label:"Более 120 дней",    min:121, max:9999 },
+      ];
+      let html = "";
+      groups.forEach(g => {
+        const inGroup = items.filter(p => p.frozen >= g.min && p.frozen <= g.max);
+        if(!inGroup.length) return;
+        html += `<div class="section-title" style="margin-top:10px">${g.label}</div>`;
+        html += inGroup.map(p => {
+          const st = S.prepStock.find(x => x.name === p.name);
+          const left = st ? Math.max(0, Math.floor((st.expires - now()) / DAY)) : 0;
+          return `<div class="recipe-mini" onclick="showPrepRecipe('${p.name.replace(/'/g,"\\'")}')">
+            <b>${p.name}</b> — нужно ${p.qty} ${p.unit}
+            <span class="hint">(${[...new Set(p.days)].join(", ")})</span><br>
+            <span class="hint">Хранить: ${prepPlace(p.name)} · ${p.frozen} дн.</span><br>
+            ${st
+              ? `<span class="tag green">✅ ${st.qty.toFixed(0)} ${st.unit} · ${left} дн.</span>`
+              : `<button class="btn small primary"
+                   onclick="event.stopPropagation();makePrep('${p.name.replace(/'/g,"\\'")}',${p.qty},'${p.unit}',${p.frozen})">
+                   ⬜ Сделать заготовку
+                 </button>`}
+          </div>`;
+        }).join("");
+      });
+      $("prepNeed").innerHTML = html;
+    }
+  }
+
+  $("prepUniversal").innerHTML = UNIVERSAL_PREPS.map(p => {
+    const st = S.prepStock.find(x => x.name === p[0]);
+    return `<div class="fridge-item" style="cursor:pointer" onclick="showPrepRecipe('${p[0].replace(/'/g,"\\'")}')">
+      <b>${p[0]}</b>
+      <span class="qty">${p[1]} ${p[2]} · ${p[3]} дн. · ${prepPlace(p[0])}</span>
+      ${st
+        ? `<span class="tag green">✅ ${st.qty} ${st.unit}</span>`
+        : `<button class="btn small"
+             onclick="event.stopPropagation();makePrep('${p[0].replace(/'/g,"\\'")}',${p[1]},'${p[2]}',${p[3]})">+ добавить</button>`}
+    </div>`;
+  }).join("");
+
+  $("prepStock").innerHTML = S.prepStock.map((p,i) => {
+    const left = Math.max(0, Math.ceil((p.expires - now()) / DAY));
+    return `<div class="fridge-item" style="cursor:pointer" onclick="showPrepRecipe('${p.name.replace(/'/g,"\\'")}')">
+      <b>${p.name}</b>
+      <span class="qty">${p.qty.toFixed(0)} ${p.unit} · ${left} дн. · ${prepPlace(p.name)}</span>
+      <button class="btn small" onclick="event.stopPropagation();editPrep(${i})">✎</button>
+      <button class="btn small danger" onclick="event.stopPropagation();S.prepStock.splice(${i},1);save();renderPreps()">✕</button>
+    </div>`;
+  }).join("") || '<p class="hint">Заготовок нет.</p>';
+}
 function showPrepRecipe(name){ const recs=RECIPES.filter(r=>r.prep&&r.prep.name===name);
   if(!recs.length){ alert("Рецепт для этой заготовки не найден в базе."); return; }
   const st=S.prepStock.find(p=>p.name===name);
@@ -1013,7 +1314,12 @@ function showPrepRecipe(name){ const recs=RECIPES.filter(r=>r.prep&&r.prep.name=
     <p class="hint" style="margin-top:10px">Заготовка делается в рамках приготовления блюда. Количество: ${recs[0].prep.qty} ${recs[0].prep.unit}, хранится ${recs[0].prep.frozen} дн.</p>
     ${st?"":`<button class="btn primary" style="width:100%;margin-top:10px" onclick="makePrep('${name.replace(/'/g,"\\'")}',${recs[0].prep.qty},'${recs[0].prep.unit}',${recs[0].prep.frozen});closeModal()">+ Добавить в запас</button>`}`;
   $("modal").classList.add("show"); }
-function makePrep(name,qty,unit,frozen){ S.prepStock.push({name,qty,unit,expires:now()+frozen*DAY,made:now()}); save(); renderPreps(); }
+function makePrep(name, qty, unit, frozen){
+  const place = prepPlace(name);
+  const shelf = place === "холодильник" ? prepFridgeShelf(name) : frozen;
+  S.prepStock.push({ name, qty, unit, expires: now() + shelf * DAY, made: now(), place });
+  save(); renderPreps();
+}
 function editPrep(i){ const p=S.prepStock[i]; const v=prompt(`Количество «${p.name}» (${p.unit}):`,p.qty); if(v===null)return;
   p.qty=+v||p.qty; save(); renderPreps(); }
 
@@ -1154,7 +1460,6 @@ document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{ document.qu
   if(b.dataset.tab==="cart")renderCart(); if(b.dataset.tab==="prep")renderPreps(); });
 
 /* ============ СТАРТ ============ */
-renderComplex(); renderAll();
 renderComplex(); renderCookCount(); renderAll();
 function renderAll(){ renderLogin(); renderFridge(); renderMenusMain(); fillMenuSelects(); const el=$("dbCount"); if(el) el.textContent=RECIPES.length; }
 if(!S.survey) openSurvey();
