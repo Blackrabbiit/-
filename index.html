@@ -166,8 +166,9 @@ textarea{min-height:70px;resize:vertical}
     <input id="mBudget" type="number" value="3000">
     <label>Кухни мира (одна или несколько)</label>
     <div class="chips" id="mCuisineChips"></div>
-    <label>Заготовок на период</label>
-    <input id="mPreps" type="number" value="2" min="0">
+    <label>Число основных приготовлений</label>
+    <select id="mCookCount"></select>
+    <p class="hint" id="mCookHint"></p>
     <label>Сложность по дням (1 — лёгкий, 3 — сложный)</label>
     <div id="mComplex"></div>
     <button class="btn primary" id="mGen" style="margin-top:12px;width:100%">Сгенерировать меню</button>
@@ -631,6 +632,13 @@ function delMenu(id){ if(!confirm("Удалить меню?"))return; if(S.activ
   S.menus=S.menus.filter(m=>m.id!==id); save(); renderMenusMain(); fillMenuSelects(); }
 
 /* ============ ГЕНЕРАЦИЯ МЕНЮ ============ */
+function diffByTime(r){
+  if(!r) return 1;
+  const t = +r.time || 0;
+  if(t < 15) return 1;
+  if(t <= 30) return 2;
+  return 3;
+}
 function bannedHas(r){
   const banned = (S.survey?.banned || []);
   const custom = (S.survey?.bannedCustom || "").toLowerCase().split(/[,;]\s*/).map(s => s.trim()).filter(Boolean);
@@ -656,9 +664,9 @@ function pickRecipe(dayCuisine,mt,comp,prevDay,day){
     .map(r => ({ r, liked: S.likes[r.id] && !usedLiked.has(r.id), ov: prevDay.length ? ingOverlap(r, prevDay) : 0, kc: Math.abs(r.kcal - target) / target }))
     .filter(x => !prevDay.some(pp => pp.id === x.r.id) && !day.some(dd => dd.id === x.r.id))
     .sort((a, b) => (b.liked - a.liked) || (b.ov - a.ov) || (a.kc - b.kc))[0]?.r;
-  let pick = best(RECIPES.filter(r => r.meal === mt && r.cuisine === dayCuisine && r.diff <= Math.min(3, comp + 1)));
+  let pick = best(RECIPES.filter(r => r.meal === mt && r.cuisine === dayCuisine && diffByTime(r) <= Math.min(3, comp + 1)));
   if(!pick) pick = best(RECIPES.filter(r => r.meal === mt && r.cuisine === dayCuisine));
-  if(!pick) pick = best(RECIPES.filter(r => r.meal === mt && r.diff <= comp + 1));
+  if(!pick) pick = best(RECIPES.filter(r => r.meal === mt && diffByTime(r) <= comp + 1));
   if(!pick) pick = best(RECIPES.filter(r => r.meal === mt));
   if(!pick) pick = RECIPES.find(r => r.meal === mt) || RECIPES[0];
   return pick || null;
@@ -668,35 +676,131 @@ function ingOverlap(r,others){ const a=new Set(r.ing.map(g=>canon(g[0]))); const
   return all.filter(n=>a.has(n)).length/Math.max(a.size,1); }
 let draft=null, draftParams=null, usedLiked=new Set();
 function renderComplex(){ const d=+$("mDays").value; $("mComplex").innerHTML=[...Array(d)].map((_,i)=>`<label>День ${i+1}</label><select><option>1</option><option selected>2</option><option>3</option></select>`).join(""); }
-$("mDays").onchange=renderComplex;
+function cookCountRange(days){
+  if(days <= 3) return [1, 3];
+  if(days <= 7) return [1, 7];
+  return [1, 10];
+}
+function renderCookCount(){
+  const days = +$("mDays").value;
+  const [min, max] = cookCountRange(days);
+  const sel = $("mCookCount");
+  if(!sel) return;
+  const prev = +sel.value || min;
+  sel.innerHTML = "";
+  for(let i = min; i <= max; i++){
+    const o = document.createElement("option");
+    o.value = i; o.textContent = i;
+    if(i === Math.min(Math.max(prev, min), max)) o.selected = true;
+    sel.appendChild(o);
+  }
+  $("mCookHint").textContent =
+    days <= 3 ? "На 3 дня: 1 — готовим один раз на все 3 дня, 3 — каждый день новое." :
+    days <= 7 ? "На неделю: 1 — одна большая готовка, 7 — каждый день новое." :
+    "На 3 недели: 1–10 (больше 10 нельзя).";
+}
+$("mDays").onchange=()=>{ renderComplex(); renderCookCount(); };
 function buildCuisineChips(){ const cs=["русская","итальянская","азиатская","кавказская","мексиканская","индийская","японская","тайская","греческая","испанская","французская","американская","смешанная"];
   $("mCuisineChips").innerHTML=cs.map(c=>`<span class="chip ${c===favCuisine()?"on":""}" onclick="chipToggle(this)">${c}</span>`).join(""); }
-function collectParams(){ return {days:+$("mDays").value, budget:+$("mBudget").value||3000,
+function collectParams(){ return {
+  days:+$("mDays").value,
+  budget:+$("mBudget").value||3000,
   cuisines:[...$("mCuisineChips").children].filter(c=>c.classList.contains("on")).map(c=>c.textContent),
-  preps:+$("mPreps").value||0,
-  comp:[...$("mComplex").querySelectorAll("select")].map(s=>+s.value)}; }
+  cookCount:+$("mCookCount").value||1,
+  comp:[...$("mComplex").querySelectorAll("select")].map(s=>+s.value)
+}; }
 
+function pickRecipeUnique(dayCuisine, mt, comp, prevDayRecipes, usedIds, usedLikedLocal){
+  const kcalT = familyAvgKcal();
+  const target = kcalT * MEAL_PCT[mt];
+  const BAD_FOR_MAIN = /компот|морс|лимонад|смузи|чай|кофе|какао|глинтвейн|напиток/i;
+  const prevIds = new Set((prevDayRecipes || []).map(r => r.id));
+  const score = r => ({
+    liked: S.likes[r.id] && !usedLikedLocal.has(r.id) ? 1 : 0,
+    ov: ingOverlap(r, prevDayRecipes || []),
+    kc: Math.abs(r.kcal - target) / Math.max(1, target)
+  });
+  const filter = pool => pool
+    .filter(r => r.meal === mt
+      && !BAD_FOR_MAIN.test(r.name)
+      && !bannedHas(r)
+      && !usedIds.has(r.id)
+      && !prevIds.has(r.id))
+    .map(r => ({ r, ...score(r) }))
+    .sort((a, b) => (b.liked - a.liked) || (b.ov - a.ov) || (a.kc - b.kc))[0]?.r;
+
+  let pick = filter(RECIPES.filter(r => r.meal === mt && r.cuisine === dayCuisine && diffByTime(r) <= Math.min(3, comp + 1)));
+  if(!pick) pick = filter(RECIPES.filter(r => r.meal === mt && r.cuisine === dayCuisine));
+  if(!pick) pick = filter(RECIPES.filter(r => r.meal === mt && diffByTime(r) <= comp + 1));
+  if(!pick) pick = filter(RECIPES.filter(r => r.meal === mt));
+  return pick || null;
+}
 function genPlan(p){
-  const plan = [];
-  let prevDay = [];
-  for(let d = 0; d < p.days; d++){
-    const dayCuisine = p.cuisines[d % p.cuisines.length];
-    const day = [];
-    for(const mt of MEAL_ORD){
-      const pick = pickRecipe(dayCuisine, mt, p.comp[d], prevDay, day);
-      if(pick){ if(S.likes[pick.id]) usedLiked.add(pick.id); day.push(pick.id); }
-      else { const fallback = RECIPES.find(r => r.meal === mt); if(fallback) day.push(fallback.id); }
+  const days = p.days;
+  const cookCount = Math.min(p.cookCount, days * 3); // не больше, чем ячеек
+  const slots = days * 3;
+  const plan = Array.from({length: days}, () => [null, null, null]);
+
+  // 1. Выбираем cookCount уникальных блюд
+  const chosen = [];
+  const usedIds = new Set();
+  const usedLikedLocal = new Set();
+  let prevDayRecipes = [];
+
+  for(let i = 0; i < cookCount; i++){
+    const mt = MEAL_ORD[i % 3];               // чередуем завтрак/обед/ужин
+    const dayCuisine = p.cuisines[i % p.cuisines.length];
+    const comp = p.comp[i % p.comp.length] || 2;
+    const pick = pickRecipeUnique(dayCuisine, mt, comp, prevDayRecipes, usedIds, usedLikedLocal);
+    if(pick){
+      chosen.push({ rid: pick.id, meal: mt, days: 1 });
+      usedIds.add(pick.id);
+      if(S.likes[pick.id]) usedLikedLocal.add(pick.id);
+      prevDayRecipes = [pick];
     }
-    while(day.length < 3){
-      const mt = MEAL_ORD[day.length];
-      const used = plan.flat().concat(day);
-      const cand = RECIPES.filter(r => r.meal === mt && !day.includes(r.id))
-        .sort((a, b) => used.filter(x => x === a.id).length - used.filter(x => x === b.id).length)[0];
-      if(!cand) break;
-      day.push(cand.id);
+  }
+  if(!chosen.length) return plan;
+
+  // 2. Растягиваем блюда на дни: каждое блюдо идёт подряд N дней
+  //    Пока не заполним все slots.
+  let slotIdx = 0;
+  let cookIdx = 0;
+  while(slotIdx < slots){
+    const dish = chosen[cookIdx % chosen.length];
+    // сколько дней подряд может стоять это блюдо
+    const r = getRecipe(dish.rid);
+    const shelf = r?.cookedShelf || 2;
+    const maxDays = Math.max(1, Math.min(shelf, days));
+    // сколько ячеек осталось
+    const left = slots - slotIdx;
+    // ставим минимум 1 день, максимум maxDays, но не больше left
+    const spanDays = Math.max(1, Math.min(maxDays, Math.ceil(left / Math.max(1, chosen.length - cookIdx % chosen.length))));
+    // заполняем spanDays * 3 ячеек, но с учётом приёма
+    for(let d = 0; d < spanDays && slotIdx < slots; d++){
+      const dayIdx = Math.floor(slotIdx / 3);
+      const mealIdx = slotIdx % 3;
+      // если приём не совпадает с блюдом — ищем подходящее
+      if(MEAL_ORD[mealIdx] === dish.meal){
+        plan[dayIdx][mealIdx] = dish.rid;
+        slotIdx++;
+      } else {
+        // иначе просто идём дальше, оставляя ячейку для другого блюда
+        slotIdx++;
+      }
     }
-    plan.push(day);
-    prevDay = day.map(rid => getRecipe(rid)).filter(Boolean);
+    cookIdx++;
+  }
+
+  // 3. Дозаполняем пустые ячейки любыми подходящими блюдами
+  for(let d = 0; d < days; d++){
+    for(let mi = 0; mi < 3; mi++){
+      if(plan[d][mi] == null){
+        const mt = MEAL_ORD[mi];
+        const pool = RECIPES.filter(r => r.meal === mt && !bannedHas(r) && !usedIds.has(r.id));
+        const pick = pool[Math.floor(Math.random() * pool.length)] || RECIPES.find(r => r.meal === mt) || RECIPES[0];
+        if(pick) plan[d][mi] = pick.id;
+      }
+    }
   }
   return plan;
 }
@@ -720,7 +824,7 @@ function dayCost(m, d, useFridge=true){ if(!m || !m.plan[d]) return 0; return m.
 function tryGen(){ const p=collectParams();
   if(!p.cuisines.length){ alert("Выберите хотя бы одну кухню"); return null; }
   draftParams=p; usedLiked=new Set();
-  draft={days:p.days,cuisines:p.cuisines,preps:p.preps,budget:p.budget,plan:genPlan(p)};
+  draft={days:p.days,cuisines:p.cuisines,cookCount:p.cookCount,budget:p.budget,plan:genPlan(p)};
   fitBudget(draft);
   return draft; }
 
@@ -1051,6 +1155,7 @@ document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{ document.qu
 
 /* ============ СТАРТ ============ */
 renderComplex(); renderAll();
+renderComplex(); renderCookCount(); renderAll();
 function renderAll(){ renderLogin(); renderFridge(); renderMenusMain(); fillMenuSelects(); const el=$("dbCount"); if(el) el.textContent=RECIPES.length; }
 if(!S.survey) openSurvey();
 </script>
